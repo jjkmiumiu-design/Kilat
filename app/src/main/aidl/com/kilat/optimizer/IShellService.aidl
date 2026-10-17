@@ -12,4 +12,7 @@ interface IShellService {
 
     // true bila proses ini bisa menyuntikkan event sentuh.
     boolean canInject() = 3;
+
+    // Hasil pemeriksaan suntik sentuh: "OK|<jalur>" bila berhasil, "ERR|<alasan>" bila gagal.
+    String injectStatus() = 4;
 }
