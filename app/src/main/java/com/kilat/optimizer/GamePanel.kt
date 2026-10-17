@@ -65,6 +65,7 @@ class GamePanel(
     private val ctx: Context,
     private val onClose: () -> Unit,
     private val onEditZones: () -> Unit,
+    private val onPickPosition: (Int) -> Unit,
 ) {
 
     val root = MaxHeightScrollView(ctx)
@@ -84,6 +85,7 @@ class GamePanel(
     private val sensiBox = LinearLayout(ctx)
     private val sensiStatus = TextView(ctx)
     private val sensiCount = TextView(ctx)
+    private val posChips = ArrayList<TextView>()
     private lateinit var globalX: StepSlider
     private lateinit var globalY: StepSlider
     private val styleIcons = ArrayList<StyleIcon>()
@@ -294,6 +296,29 @@ class GamePanel(
         sensiStatus.typeface = Typeface.DEFAULT_BOLD
         sensiBox.addView(sensiStatus, lp(top = 2))
 
+        sensiBox.addView(label("Posisi zona"), lp(top = 14))
+        val posRow = LinearLayout(ctx).apply { orientation = LinearLayout.HORIZONTAL }
+        SensiPrefs.PRESET_NAMES.forEachIndexed { i, name ->
+            val chip = TextView(ctx).apply {
+                text = name.uppercase()
+                gravity = Gravity.CENTER
+                textSize = 13f
+                typeface = Typeface.DEFAULT_BOLD
+                setOnClickListener { onPickPosition(i) }
+            }
+            posChips += chip
+            posRow.addView(chip, LinearLayout.LayoutParams(0, dp(42), 1f).apply { if (i > 0) leftMargin = dp(8) })
+        }
+        sensiBox.addView(posRow, lp(top = 8))
+        sensiBox.addView(
+            TextView(ctx).apply {
+                text = "Ketuk salah satu: layar HP tampil dengan zona di posisi itu, lalu geser atau ubah ukurannya dan simpan dengan ✓."
+                setTextColor(MUTED)
+                textSize = 12f
+            },
+            lp(top = 6),
+        )
+
         sensiBox.addView(label("Sensitivity global"), lp(top = 14))
         globalX = StepSlider(ctx, "Sensitivity X") { SensiPrefs.setGlobal(ctx, x = it) }
         globalY = StepSlider(ctx, "Sensitivity Y") { SensiPrefs.setGlobal(ctx, y = it) }
@@ -358,13 +383,18 @@ class GamePanel(
             globalX.set(sd.gx)
             globalY.set(sd.gy)
             sensiCount.text = "${sd.zones.size} zona"
-            when (Shell.injectReady) {
-                true -> { sensiStatus.text = "Siap"; sensiStatus.setTextColor(GOOD) }
-                false -> {
-                    sensiStatus.text = "Tidak tersedia. Pastikan Shizuku berjalan, lalu buka ulang Game Tools"
-                    sensiStatus.setTextColor(BAD)
+            val (ready, msg) = Shell.injectMessage()
+            sensiStatus.text = msg
+            sensiStatus.setTextColor(when (ready) { true -> GOOD; false -> BAD; null -> MUTED })
+            val cur0 = SensiPrefs.presetOf(sd)
+            posChips.forEachIndexed { i, chip ->
+                val sel = i == cur0
+                chip.background = GradientDrawable().apply {
+                    cornerRadius = dp(12).toFloat()
+                    setColor(if (sel) Color.argb(0x33, 255, 122, 69) else CHIP_BG)
+                    setStroke(dp(if (sel) 2 else 1), if (sel) ACCENT else LINE)
                 }
-                null -> { sensiStatus.text = "Memeriksa…"; sensiStatus.setTextColor(MUTED) }
+                chip.setTextColor(if (sel) TEXT else MUTED)
             }
 
             styleIcons.forEachIndexed { i, icon -> icon.setSelectedStyle(i == s.crossStyle, dp(12).toFloat(), dp(if (i == s.crossStyle) 2 else 1)) }

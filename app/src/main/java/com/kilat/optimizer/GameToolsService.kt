@@ -125,9 +125,14 @@ class GameToolsService : Service() {
                 val s = settings ?: GameToolsPrefs.read(this)
                 val o = overlay ?: return
 
-                if (Shell.status.value == ShizukuStatus.READY && Shell.injectReady == null) {
+                // Periksa suntik sentuh sampai berhasil. Bila gagal, ulangi tiap 4 detik (UserService bisa
+                // menyusul tersambung) supaya tidak perlu membuka ulang Game Tools.
+                val probeNow = Shell.status.value == ShizukuStatus.READY &&
+                    (Shell.injectReady == null || (Shell.injectReady == false && tick % 4 == 0))
+                if (probeNow) {
+                    val before = Shell.injectReady to Shell.injectDetail
                     Shell.probeInject()
-                    o.update(s) // perbarui status injeksi di panel
+                    if (before != (Shell.injectReady to Shell.injectDetail)) o.update(s) // perbarui status di panel
                 }
                 if (Shell.status.value != ShizukuStatus.READY) {
                     o.setActive(false)

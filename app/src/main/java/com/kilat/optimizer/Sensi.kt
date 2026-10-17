@@ -92,6 +92,39 @@ object SensiPrefs {
             .apply()
     }
 
+    /** Posisi bawaan zona: 0 kiri, 1 tengah, 2 kanan (pecahan lebar layar). */
+    val PRESET_X = floatArrayOf(0.20f, 0.50f, 0.80f)
+    const val PRESET_Y = 0.5f
+    val PRESET_NAMES = arrayOf("Kiri", "Tengah", "Kanan")
+
+    /** Preset yang cocok dengan zona pertama, atau -1 bila posisinya sudah digeser sendiri. */
+    fun presetOf(d: SensiData): Int {
+        val z = d.zones.firstOrNull() ?: return -1
+        for (i in PRESET_X.indices) if (kotlin.math.abs(z.cx - PRESET_X[i]) < 0.04f) return i
+        return -1
+    }
+
+    /**
+     * Menaruh zona pertama di posisi preset (membuatnya bila belum ada), mengaktifkan fitur Sensi,
+     * lalu mengembalikan id zona itu. Nilai X dan Y tetap, dan zona baru memakai nilai global.
+     */
+    fun applyPreset(ctx: Context, pos: Int): Int {
+        val d = read(ctx)
+        val x = PRESET_X[pos.coerceIn(0, 2)]
+        val zones = d.zones.toMutableList()
+        val id: Int
+        if (zones.isEmpty()) {
+            id = 1
+            zones += SensiZone(id, x, PRESET_Y, SIZE_DEFAULT, true, DEFAULT_VALUE, DEFAULT_VALUE)
+        } else {
+            id = zones[0].id
+            zones[0] = zones[0].copy(cx = x, cy = PRESET_Y)
+        }
+        write(ctx, SensiData(zones, d.gx, d.gy))
+        GameToolsPrefs.setSensiOn(ctx, true)
+        return id
+    }
+
     fun setGlobal(ctx: Context, x: Float? = null, y: Float? = null) {
         val e = GameToolsPrefs.prefs(ctx).edit()
         if (x != null) e.putFloat("sensi_gx", snap(x))

@@ -30,6 +30,7 @@ class SensiEditor(
     private val ctx: Context,
     private val screenW: Int,
     private val screenH: Int,
+    private val selectId: Int = -1,
     private val onDone: () -> Unit,
 ) {
     val root = FrameLayout(ctx)
@@ -66,6 +67,7 @@ class SensiEditor(
         gx = saved.gx
         gy = saved.gy
         nextId = (zones.maxOfOrNull { it.id } ?: 0) + 1
+        if (zones.any { it.id == selectId }) selected = selectId
 
         root.addView(canvas, FrameLayout.LayoutParams(screenW, screenH))
         root.addView(toolbar(), FrameLayout.LayoutParams(
@@ -388,7 +390,20 @@ class SensiEditor(
             return true
         }
 
+        private val guide = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            color = Color.argb(0x55, 255, 255, 255)
+            textAlign = Paint.Align.CENTER
+            typeface = Typeface.DEFAULT_BOLD
+        }
+
         override fun onDraw(c: Canvas) {
+            // Pembagi layar: KIRI | TENGAH | KANAN, supaya posisi zona terbaca di layar HP sendiri.
+            line.color = Color.argb(0x40, 255, 255, 255)
+            line.strokeWidth = dp(1).toFloat()
+            c.drawLine(width / 3f, 0f, width / 3f, height.toFloat(), line)
+            c.drawLine(width * 2f / 3f, 0f, width * 2f / 3f, height.toFloat(), line)
+            guide.textSize = dp(13).toFloat()
+            for (i in 0..2) c.drawText(SensiPrefs.PRESET_NAMES[i].uppercase(), width * (2 * i + 1) / 6f, height - dp(18).toFloat(), guide)
             for (z in zones) {
                 val cx = z.cx * width
                 val cy = z.cy * height

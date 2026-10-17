@@ -74,7 +74,10 @@ class GameOverlay(context: Context) {
     private val panel = GamePanel(ctx, onClose = {
         panelOpen = false
         sync()
-    }, onEditZones = { openEditor() })
+    }, onEditZones = { openEditor() }, onPickPosition = { pos ->
+        // Pilih Kiri/Tengah/Kanan: simpan zona di posisi itu, lalu tampilkan layar HP dengan zona terpilih.
+        openEditor(SensiPrefs.applyPreset(ctx, pos))
+    })
 
     private var editing = false
     private var editor: SensiEditor? = null
@@ -172,10 +175,10 @@ class GameOverlay(context: Context) {
     private fun sensiWanted(): Boolean =
         active && settings.sensiOn && !editing && Shell.injectReady == true
 
-    private fun openEditor() {
+    private fun openEditor(selectId: Int = -1) {
         if (!active || editing) return
         val (w, h) = screenSize()
-        val ed = SensiEditor(ctx, w, h) { closeEditor() }
+        val ed = SensiEditor(ctx, w, h, selectId) { closeEditor() }
         try {
             wm.addView(ed.root, params(true, w, h, Gravity.TOP or Gravity.START))
         } catch (e: Exception) {

@@ -38,6 +38,13 @@ object Shell {
     var injectReady: Boolean? = null
         private set
 
+    /** Alasan terakhir suntik sentuh tidak siap, atau jalur yang berhasil dipakai. Untuk ditampilkan di panel. */
+    @Volatile
+    var injectDetail: String = ""
+        private set
+
+    private var lastBindAt = 0L
+
     private val _status = MutableStateFlow(ShizukuStatus.NOT_RUNNING)
     val status: StateFlow<ShizukuStatus> = _status
 
@@ -125,6 +132,7 @@ object Shell {
     private fun bind() {
         val ctx = appContext ?: return
         binding = true
+        lastBindAt = android.os.SystemClock.elapsedRealtime()
         _status.value = ShizukuStatus.CONNECTING
         main.removeCallbacks(timeout)
         main.postDelayed(timeout, BIND_TIMEOUT_MS)
@@ -177,15 +185,64 @@ object Shell {
         }
     }
 
-    /** Memeriksa sekali apakah UserService bisa menyuntikkan sentuhan. Jalur cadangan (tanpa UserService) tidak bisa. */
+    /**
+     * Memeriksa apakah UserService benar-benar bisa menyuntikkan sentuhan. Aman dipanggil berulang:
+     * bila UserService belum tersambung (atau jatuh ke jalur cadangan), ia mencoba menyambung ulang
+     * tiap [REBIND_MS], jadi pengguna tidak perlu membuka ulang Game Tools.
+     */
     suspend fun probeInject(): Boolean = withContext(Dispatchers.IO) {
+        val s = service
+        if (s == null) {
+            injectReady = false
+            injectDetail = when {
+                binding -> "UserService Shizuku sedang tersambung…"
+                useProcess -> "UserService Shizuku gagal tersambung (jalur cadangan tidak bisa menyuntik sentuhan)"
+                else -> "UserService Shizuku belum tersambung"
+            }
+            main.post { rebindIfStuck() }
+            return@withContext false
+        }
         val ok = try {
-            service?.canInject() == true
+            val st = s.injectStatus()
+            val parts = st.split("|", limit = 2)
+            if (parts[0] == "OK") {
+                injectDetail = "Jalur: " + parts.getOrElse(1) { "?" }
+                true
+            } else {
+                injectDetail = parts.getOrElse(1) { st }.ifEmpty { "Tidak ada jalur suntik yang berhasil" }
+                false
+            }
         } catch (e: Throwable) {
+            injectDetail = "UserService tidak merespons: ${e.javaClass.simpleName}"
             false
         }
         injectReady = ok
         ok
+    }
+
+    private const val REBIND_MS = 8000L
+
+    /** Dari thread utama: bila Shizuku siap tetapi UserService belum ada (jalur cadangan), coba bind lagi. */
+    private fun rebindIfStuck() {
+        if (service != null || binding) return
+        if (!Shizuku.pingBinder() || Shizuku.checkSelfPermission() != PackageManager.PERMISSION_GRANTED) return
+        if (android.os.SystemClock.elapsedRealtime() - lastBindAt < REBIND_MS) return
+        try {
+            userArgs?.let { Shizuku.unbindUserService(it, connection, false) }
+        } catch (e: Throwable) {
+            // tidak ada yang perlu dilepas
+        }
+        useProcess = false
+        bind()
+    }
+
+    /** Pesan status suntik sentuh untuk pengguna. Pasangan: (siap, teks). */
+    fun injectMessage(): Pair<Boolean?, String> = when {
+        _status.value == ShizukuStatus.NOT_RUNNING -> false to "Shizuku tidak berjalan. Jalankan Shizuku dulu."
+        _status.value == ShizukuStatus.NEEDS_PERMISSION -> false to "Izin Shizuku belum diberikan untuk Kilat."
+        injectReady == true -> true to "Siap · $injectDetail"
+        injectReady == false -> false to injectDetail.ifEmpty { "Tidak tersedia" }
+        else -> null to "Memeriksa…"
     }
 
     /** Mengirim satu event sentuh. Tidak menunggu hasil. false bila UserService tidak tersedia. */

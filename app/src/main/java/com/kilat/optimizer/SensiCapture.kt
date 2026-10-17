@@ -16,6 +16,15 @@ import kotlin.math.roundToInt
 /** ID jari untuk sentuhan yang disuntikkan. Dipilih besar supaya tidak bentrok dengan jari asli (0, 1, 2, ...). */
 private const val INJECT_ID = 20
 
+/**
+ * Id perangkat untuk sentuhan suntikan. Android 15+ melacak sentuhan per perangkat, jadi jari suntik
+ * dibuat sebagai perangkat sendiri (0, seperti scrcpy) supaya tidak bentrok dengan jari asli yang
+ * masih turun di perangkat layar sentuh. Android 14 ke bawah hanya mengizinkan satu perangkat
+ * sekaligus, jadi di sana id perangkat asli dipakai.
+ */
+internal fun injectDeviceId(realDeviceId: Int): Int =
+    if (Build.VERSION.SDK_INT >= 35) 0 else realDeviceId
+
 /** Jeda setelah jendela zona dibuat tembus sentuh, sebelum jari pertama disuntikkan. */
 private const val ACTIVATE_DELAY_MS = 45L
 
@@ -142,7 +151,7 @@ class SensiOverlay(
     }
 
     fun inject(action: Int, x: Float, y: Float, downTime: Long, deviceId: Int): Boolean {
-        val ok = Shell.inject(action, INJECT_ID, x, y, downTime, SystemClock.uptimeMillis(), deviceId)
+        val ok = Shell.inject(action, INJECT_ID, x, y, downTime, SystemClock.uptimeMillis(), injectDeviceId(deviceId))
         if (!ok) {
             // UserService hilang: lepas semua zona supaya sentuhan tidak tertelan tanpa diteruskan.
             main.post { hide() }
@@ -316,7 +325,7 @@ class ZoneView(ctx: Context, private val host: SensiOverlay) : View(ctx) {
     fun release() {
         removeCallbacks(activate)
         if (state == S.ACTIVE) {
-            Shell.inject(MotionEvent.ACTION_UP, INJECT_ID, ipX, ipY, injDownTime, SystemClock.uptimeMillis(), deviceId)
+            Shell.inject(MotionEvent.ACTION_UP, INJECT_ID, ipX, ipY, injDownTime, SystemClock.uptimeMillis(), injectDeviceId(deviceId))
         }
         state = S.IDLE
         trackedId = -1

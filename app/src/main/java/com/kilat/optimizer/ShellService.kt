@@ -1,9 +1,13 @@
 package com.kilat.optimizer
 
 import android.os.IBinder
+import android.os.SystemClock
 import android.view.InputDevice
 import android.view.InputEvent
+import android.view.KeyEvent
 import android.view.MotionEvent
+import java.lang.reflect.InvocationTargetException
+import java.lang.reflect.Method
 import kotlin.system.exitProcess
 
 /**
@@ -28,36 +32,124 @@ class ShellService : IShellService.Stub() {
 
     // ---------- suntik sentuh ----------
 
-    /** Fungsi yang memasukkan event ke sistem input, atau null bila tidak ada jalur yang bisa dipakai. */
-    private val injector: ((InputEvent) -> Boolean)? by lazy { buildInjector() }
+    private class Injector(val name: String, val fn: (InputEvent) -> Boolean)
 
-    private fun buildInjector(): ((InputEvent) -> Boolean)? {
-        // Jalur 1: InputManager.getInstance().injectInputEvent(event, mode). Mode 0 = async.
-        try {
-            val cls = Class.forName("android.hardware.input.InputManager")
-            val im = cls.getDeclaredMethod("getInstance").invoke(null)
-            val m = cls.getMethod("injectInputEvent", InputEvent::class.java, Int::class.javaPrimitiveType)
-            return { ev: InputEvent -> (m.invoke(im, ev, 0) as? Boolean) ?: false }
-        } catch (e: Throwable) {
-            // lanjut ke jalur 2
+    @Volatile private var injector: Injector? = null
+    @Volatile private var status: String = ""
+    private val lock = Any()
+    private var setDisplayId: Method? = null
+
+    /** Membuka bungkus InvocationTargetException supaya pesan aslinya (mis. SecurityException) terbaca. */
+    private fun root(t: Throwable): Throwable {
+        var e = t
+        while (e is InvocationTargetException && e.targetException != null) e = e.targetException
+        return e
+    }
+
+    private fun describe(t: Throwable): String {
+        val r = root(t)
+        return "${r.javaClass.simpleName}: ${r.message ?: "-"}".take(160)
+    }
+
+    /** Memanggil method injectInputEvent pada [target]. Mendukung bentuk (event, mode) dan (event, mode, targetUid). */
+    private fun methodInjector(name: String, target: Any, cls: Class<*>): Injector? {
+        val all = cls.methods.filter {
+            (it.name == "injectInputEvent" || it.name == "injectInputEventToTarget") &&
+                it.parameterTypes.isNotEmpty() && InputEvent::class.java.isAssignableFrom(it.parameterTypes[0])
         }
-        // Jalur 2: langsung ke layanan "input" lewat ServiceManager.
-        try {
-            val sm = Class.forName("android.os.ServiceManager")
-            val binder = sm.getMethod("getService", String::class.java).invoke(null, "input") as IBinder
-            val stub = Class.forName("android.hardware.input.IInputManager\$Stub")
-            val svc = stub.getMethod("asInterface", IBinder::class.java).invoke(null, binder)!!
-            val m = svc.javaClass.getMethod("injectInputEvent", InputEvent::class.java, Int::class.javaPrimitiveType)
-            return { ev: InputEvent -> (m.invoke(svc, ev, 0) as? Boolean) ?: false }
-        } catch (e: Throwable) {
-            return null
+        // Utamakan bentuk 2 parameter, lalu 3 parameter (targetUid = -1: semua).
+        val m = all.firstOrNull { it.parameterTypes.size == 2 && it.name == "injectInputEvent" }
+            ?: all.firstOrNull { it.parameterTypes.size == 3 && it.name == "injectInputEventToTarget" }
+            ?: all.firstOrNull { it.parameterTypes.size == 3 }
+            ?: return null
+        m.isAccessible = true
+        val three = m.parameterTypes.size == 3
+        return Injector(name) { ev ->
+            val r = if (three) m.invoke(target, ev, 0, -1) else m.invoke(target, ev, 0)
+            (r as? Boolean) ?: true
         }
     }
 
-    override fun canInject(): Boolean = injector != null
+    private fun candidates(errors: MutableList<String>): List<Injector> {
+        val out = ArrayList<Injector>()
+        fun attempt(label: String, block: () -> Injector?) {
+            try {
+                val inj = block()
+                if (inj != null) out.add(inj) else errors.add("$label: method tidak ditemukan")
+            } catch (t: Throwable) {
+                errors.add("$label: ${describe(t)}")
+            }
+        }
+        // Android 14+: InputManagerGlobal (jalur yang dipakai scrcpy).
+        attempt("InputManagerGlobal") {
+            val cls = Class.forName("android.hardware.input.InputManagerGlobal")
+            val inst = cls.getMethod("getInstance").invoke(null)
+            methodInjector("InputManagerGlobal", inst!!, cls)
+        }
+        // Android 13 ke bawah: InputManager.getInstance().
+        attempt("InputManager") {
+            val cls = Class.forName("android.hardware.input.InputManager")
+            val gi = cls.getDeclaredMethod("getInstance").apply { isAccessible = true }
+            methodInjector("InputManager", gi.invoke(null)!!, cls)
+        }
+        // Langsung ke layanan "input". Method dicari lewat interface IInputManager (publik),
+        // bukan kelas Proxy-nya yang privat, kalau tidak invoke() ditolak IllegalAccessException.
+        attempt("IInputManager") {
+            val sm = Class.forName("android.os.ServiceManager")
+            val binder = sm.getMethod("getService", String::class.java).invoke(null, "input") as? IBinder
+                ?: error("layanan input tidak ditemukan")
+            val stub = Class.forName("android.hardware.input.IInputManager\$Stub")
+            val svc = stub.getMethod("asInterface", IBinder::class.java).invoke(null, binder)!!
+            methodInjector("IInputManager", svc, Class.forName("android.hardware.input.IInputManager"))
+        }
+        return out
+    }
+
+    /** Mengirim event uji yang tidak berefek (tombol KEYCODE_UNKNOWN turun lalu naik). true bila sistem menerimanya. */
+    private fun selfTest(inj: Injector): Boolean {
+        val now = SystemClock.uptimeMillis()
+        val down = KeyEvent(now, now, KeyEvent.ACTION_DOWN, KeyEvent.KEYCODE_UNKNOWN, 0)
+        val up = KeyEvent(now, now, KeyEvent.ACTION_UP, KeyEvent.KEYCODE_UNKNOWN, 0)
+        return inj.fn(down) && inj.fn(up)
+    }
+
+    private fun resolve() {
+        synchronized(lock) {
+            if (injector != null) return
+            val errors = ArrayList<String>()
+            for (c in candidates(errors)) {
+                try {
+                    if (selfTest(c)) {
+                        injector = c
+                        status = "OK|${c.name}"
+                        try {
+                            setDisplayId = InputEvent::class.java.getMethod("setDisplayId", Int::class.javaPrimitiveType)
+                        } catch (t: Throwable) {
+                            setDisplayId = null
+                        }
+                        return
+                    }
+                    errors.add("${c.name}: sistem menolak event (INJECT_EVENTS?)")
+                } catch (t: Throwable) {
+                    errors.add("${c.name}: ${describe(t)}")
+                }
+            }
+            status = "ERR|" + errors.joinToString(" | ").ifEmpty { "tidak ada jalur suntik" }.take(300)
+        }
+    }
+
+    override fun canInject(): Boolean {
+        if (injector == null) resolve()
+        return injector != null
+    }
+
+    override fun injectStatus(): String {
+        if (injector == null) resolve()
+        return status
+    }
 
     override fun injectTouch(action: Int, pointerId: Int, x: Float, y: Float, downTime: Long, eventTime: Long, deviceId: Int) {
-        val inject = injector ?: return
+        val inject = (injector ?: run { resolve(); injector })?.fn ?: return
         val props = arrayOf(
             MotionEvent.PointerProperties().apply {
                 id = pointerId
@@ -77,6 +169,12 @@ class ShellService : IShellService.Stub() {
             0, 0, 1f, 1f, deviceId, 0, InputDevice.SOURCE_TOUCHSCREEN, 0,
         )
         try {
+            // Arahkan ke layar utama secara eksplisit (seperti scrcpy).
+            try {
+                setDisplayId?.invoke(ev, 0)
+            } catch (t: Throwable) {
+                // tidak kritis
+            }
             inject(ev)
         } catch (e: Throwable) {
             // Satu event gagal tidak boleh mematikan layanan.
