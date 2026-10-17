@@ -33,7 +33,10 @@ Zona bundar di layar. Gerakan jari yang dimulai di dalam zona dilebarkan sesuai 
 Cara kerja (tanpa root):
 - Tiap zona adalah jendela overlay transparan seukuran zona yang menangkap sentuhan di areanya.
 - Begitu jari menyentuh, jendela dibuat tembus sentuh, lalu sentuhan yang sudah dilebarkan disuntikkan ke game lewat `InputManager.injectInputEvent` di proses UserService Shizuku (uid shell). Titik suntik yang hampir keluar layar diangkat dan diletakkan lagi di titik awal.
-- Butuh Shizuku lewat **UserService**. Jalur cadangan tidak bisa menyuntik, dan statusnya tampil "Tidak didukung" di tab Sensi.
+- Butuh Shizuku lewat **UserService**. Jalur cadangan tidak bisa menyuntik. Status di tab Sensi kini menampilkan alasan yang sebenarnya (Shizuku mati, izin belum diberi, UserService belum tersambung, atau galat dari sistem input) dan diperiksa ulang otomatis tiap beberapa detik, jadi tidak perlu membuka ulang Game Tools.
+- Status "Siap" hanya muncul setelah proses Shizuku benar-benar berhasil memasukkan event uji (tombol KEYCODE_UNKNOWN turun-naik, tanpa efek) ke sistem input. Jalur yang dicoba berurutan: `InputManagerGlobal` (Android 14+), `InputManager`, lalu layanan `input` langsung lewat `IInputManager`.
+- Di Android 15+ sentuhan suntikan memakai id perangkat sendiri (0) supaya tidak bentrok dengan jari asli.
+- **Posisi zona**: tombol KIRI / TENGAH / KANAN di tab Sensi menaruh zona di posisi itu, mengaktifkan Sensi, dan menampilkan layar HP dengan pembagi tiga kolom dan zona terpilih untuk digeser atau diubah ukurannya.
 - Bila sistem membatalkan gestur zona 3 kali berturut-turut di awal sentuhan, fitur mati sendiri dan menampilkan pemberitahuan, supaya game tetap bisa dimainkan.
 - Crosshair dan angka FPS kini memakai alpha jendela 0,75. Android 12+ menolak sentuhan yang menembus overlay dengan opasitas di atas 0,8.
 
