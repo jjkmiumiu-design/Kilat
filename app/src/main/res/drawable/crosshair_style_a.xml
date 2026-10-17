@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Bentuk crosshair gaya A. Warna dan opasitas diatur lewat kode, jadi fillColor ini hanya bawaan. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="46dp"
+    android:height="46dp"
+    android:viewportWidth="46"
+    android:viewportHeight="46">
+    <path
+        android:fillColor="#FFFFFFFF"
+        android:fillType="evenOdd"
+        android:pathData="M24,29v8h-2v-8h2zM37,22v2h-8v-2h8zM17,22v2L9,24v-2h8zM24,22v2h-2v-2h2zM24,9v8h-2L22,9h2z" />
+</vector>
