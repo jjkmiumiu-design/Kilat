@@ -88,6 +88,10 @@ class GameOverlay(context: Context) {
         Toast.makeText(ctx, "Zona sensi dimatikan: ROM ini tidak meneruskan sentuhan dengan benar", Toast.LENGTH_LONG).show()
     }
 
+    init {
+        sensi.onDebug = { msg -> Toast.makeText(ctx, msg, Toast.LENGTH_SHORT).show() }
+    }
+
     // ---------- parameter jendela ----------
 
     private fun params(touchable: Boolean, width: Int, height: Int, gravity: Int): WindowManager.LayoutParams {
@@ -169,6 +173,7 @@ class GameOverlay(context: Context) {
 
     /** Dipanggil tiap putaran service: menyesuaikan zona bila ukuran layar berubah (rotasi). */
     fun refreshSensi() {
+        sensi.debugOn = GameToolsPrefs.prefs(ctx).getBoolean("sensi_debug", false)
         sensi.apply(sensiWanted(), SensiPrefs.read(ctx))
     }
 

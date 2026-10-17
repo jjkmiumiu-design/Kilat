@@ -182,6 +182,17 @@ object Shell {
         ).apply { isAccessible = true }
     }
 
+    /** Membuka proses yang berjalan lama (mis. getevent) dengan hak shell lewat Shizuku. null bila gagal. */
+    fun openStream(vararg cmd: String): Process? = try {
+        if (!Shizuku.pingBinder() || Shizuku.checkSelfPermission() != PackageManager.PERMISSION_GRANTED) {
+            null
+        } else {
+            newProcessMethod.invoke(null, arrayOf(*cmd), null, null) as Process
+        }
+    } catch (e: Throwable) {
+        null
+    }
+
     private fun runViaProcess(command: String): String {
         val p = newProcessMethod.invoke(null, arrayOf("sh", "-c", "$command 2>&1"), null, null) as Process
         val out = p.inputStream.bufferedReader().readText()

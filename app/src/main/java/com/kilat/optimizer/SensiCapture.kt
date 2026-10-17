@@ -32,6 +32,12 @@ private const val ACTIVATE_DELAY_MS = 60L
 private const val EARLY_CANCEL_MS = 250L
 private const val MAX_STRIKES = 3
 
+/** Jari mentah dianggap milik gestur zona bila posisinya sedekat ini (piksel) dari titik sentuh jendela. */
+private const val RAW_BIND_PX = 160f
+
+/** Gerakan jari mentah (piksel) tanpa kabar dari jendela sebelum jalur mentah mengambil alih. */
+private const val RAW_TAKEOVER_PX = 24f
+
 /**
  * Jendela zona sensitivitas. Setiap zona adalah satu jendela transparan seukuran zona yang
  * menangkap sentuhan di areanya, lalu menyuntikkan sentuhan yang sudah dilebarkan ke game.
@@ -56,8 +62,17 @@ class SensiOverlay(
 
     private val entries = ArrayList<Entry>()
     private val main = Handler(Looper.getMainLooper())
+    private val raw = RawTouch(main, wm, screenSize)
     private var signature = ""
     private var strikes = 0
+
+    /** Mode uji tersembunyi (tahan lama tulisan "Injeksi sentuh" di panel). Menampilkan toast diagnosis tiap gestur. */
+    var debugOn = false
+    var onDebug: ((String) -> Unit)? = null
+
+    fun debug(msg: String) {
+        if (debugOn) onDebug?.invoke(msg)
+    }
 
     var screenW = 0f
         private set
@@ -74,7 +89,10 @@ class SensiOverlay(
         val sig = "${w}x$h|" + data.zones.joinToString(";") {
             "${it.id},${it.cx},${it.cy},${it.sizeDp},${data.xOf(it)},${data.yOf(it)}"
         }
-        if (sig == signature && entries.isNotEmpty()) return
+        if (sig == signature && entries.isNotEmpty()) {
+            maybeRestartRaw()
+            return
+        }
         // Jangan memutus gestur yang sedang berjalan. Dicoba lagi pada pemanggilan berikutnya.
         if (entries.any { it.view.busy }) return
 
@@ -118,10 +136,30 @@ class SensiOverlay(
             }
         }
         signature = sig
+        if (entries.isNotEmpty()) startRaw()
     }
+
+    private var rawStartedAt = 0L
+
+    private fun startRaw() {
+        rawStartedAt = SystemClock.uptimeMillis()
+        raw.listener = { pts -> for (e in entries) e.view.onRaw(pts) }
+        raw.start()
+    }
+
+    /** Bila pembacaan mentah berhenti sendiri, nyalakan lagi (paling cepat tiap 10 detik). */
+    private fun maybeRestartRaw() {
+        val st = raw.status
+        if ((st == "berhenti" || st.startsWith("galat")) && SystemClock.uptimeMillis() - rawStartedAt > 10_000) startRaw()
+    }
+
+    /** Status pembacaan mentah, untuk mode uji. */
+    val rawStatus: String get() = raw.status
 
     /** Melepas semua jendela zona. Jari suntik yang masih turun diangkat dulu. */
     fun hide() {
+        raw.listener = null
+        raw.stop()
         for (e in entries) {
             e.view.release()
             try {
@@ -216,6 +254,23 @@ class ZoneView(ctx: Context, private val host: SensiOverlay) : View(ctx) {
 
     private val activate = Runnable { onActivate() }
 
+    // Jalur cadangan: posisi jari asli dari pembacaan mentah layar sentuh. Dipakai bila sistem
+    // berhenti mengirim gerakan jari asli ke jendela ini setelah sentuhan suntikan masuk.
+    private var rawId = -1
+    private var rawSeen = 0
+    private var useRaw = false
+    private var rawBindX = 0f
+    private var rawBindY = 0f
+
+    // Penghitung untuk mode uji.
+    private var dbgMoves = 0
+    private var dbgAfter = 0
+    private var dbgInj = 0
+    private var dbgAnchor = 0
+    private val snap = Runnable {
+        host.debug("1 dtk setelah suntik: gerak jari asli yang diterima=$dbgAfter, gerak disuntik=$dbgInj")
+    }
+
     // Koordinat layar untuk pointer ke-i. rawX milik pointer pertama dipakai untuk mencari posisi jendela.
     private fun screenX(e: MotionEvent, i: Int) = e.getX(i) + (e.rawX - e.getX(0))
     private fun screenY(e: MotionEvent, i: Int) = e.getY(i) + (e.rawY - e.getY(0))
@@ -225,8 +280,10 @@ class ZoneView(ctx: Context, private val host: SensiOverlay) : View(ctx) {
         when (e.actionMasked) {
             MotionEvent.ACTION_DOWN -> if (state == S.IDLE) begin(e)
             MotionEvent.ACTION_MOVE -> if (state != S.IDLE) {
+                dbgMoves++
+                if (state == S.ACTIVE) dbgAfter++
                 val i = e.findPointerIndex(trackedId)
-                if (i >= 0) move(screenX(e, i), screenY(e, i))
+                if (i >= 0 && !useRaw) move(screenX(e, i), screenY(e, i))
             }
             MotionEvent.ACTION_POINTER_UP -> if (state != S.IDLE && e.getPointerId(e.actionIndex) == trackedId) finish(false)
             MotionEvent.ACTION_UP -> if (state != S.IDLE) finish(false)
@@ -253,6 +310,13 @@ class ZoneView(ctx: Context, private val host: SensiOverlay) : View(ctx) {
         realDownAt = SystemClock.uptimeMillis()
         pendingUp = false
         pendingCancel = false
+        dbgMoves = 0
+        dbgAfter = 0
+        dbgInj = 0
+        dbgAnchor = 0
+        rawId = -1
+        rawSeen = 0
+        useRaw = false
         state = S.WAIT
         // Singkirkan jendela ini dari bawah jari supaya sentuhan suntikan langsung jatuh ke game.
         host.setAway(this, true)
@@ -267,6 +331,7 @@ class ZoneView(ctx: Context, private val host: SensiOverlay) : View(ctx) {
             return
         }
         state = S.ACTIVE
+        if (host.debugOn) postDelayed(snap, 1000)
         // Gerakan yang sudah terjadi selama menunggu.
         if (curX != downX || curY != downY) {
             ipX = SensiMath.clampX(anchorX + (curX - downX) * sx, host.screenW)
@@ -276,6 +341,48 @@ class ZoneView(ctx: Context, private val host: SensiOverlay) : View(ctx) {
         prevX = curX
         prevY = curY
         if (pendingUp) finish(pendingCancel)
+    }
+
+    /** Dari pembacaan mentah layar sentuh (thread utama). Lihat penjelasan jalur cadangan di atas. */
+    fun onRaw(pts: List<RawPt>) {
+        if (state == S.IDLE) return
+        if (rawId == -1) {
+            var best: RawPt? = null
+            var bestD = RAW_BIND_PX * RAW_BIND_PX
+            for (p in pts) {
+                val dx = p.x - downX
+                val dy = p.y - downY
+                val d = dx * dx + dy * dy
+                if (d <= bestD) {
+                    bestD = d
+                    best = p
+                }
+            }
+            val b = best ?: return
+            rawId = b.id
+            rawBindX = b.x
+            rawBindY = b.y
+        }
+        val me = pts.firstOrNull { it.id == rawId }
+        if (me == null) {
+            // Jari asli terangkat. Jendela mungkin tidak pernah diberi tahu (sistem berhenti meneruskan
+            // sentuhan asli setelah suntikan masuk), jadi akhiri gestur dari sini. Baru dipercaya setelah
+            // jari itu terbaca stabil di dua frame, supaya salah baca tidak memutus gestur.
+            if (useRaw || rawSeen >= 2) finish(false)
+            return
+        }
+        rawSeen++
+        if (!useRaw) {
+            if (state != S.ACTIVE || dbgAfter > 0) return
+            val dx = me.x - rawBindX
+            val dy = me.y - rawBindY
+            if (dx * dx + dy * dy < RAW_TAKEOVER_PX * RAW_TAKEOVER_PX) return
+            // Jari sudah bergerak tetapi jendela diam: ambil alih dari titik awal jari mentah.
+            useRaw = true
+            prevX = rawBindX
+            prevY = rawBindY
+        }
+        move(me.x, me.y)
     }
 
     private fun move(x: Float, y: Float) {
@@ -293,8 +400,10 @@ class ZoneView(ctx: Context, private val host: SensiOverlay) : View(ctx) {
         if (SensiMath.inside(nx, ny, host.screenW, host.screenH)) {
             ipX = nx
             ipY = ny
+            dbgInj++
             host.inject(MotionEvent.ACTION_MOVE, ipX, ipY, injDownTime, deviceId)
         } else {
+            dbgAnchor++
             // Titik suntik hampir keluar layar: angkat, letakkan lagi di titik awal, lalu lanjutkan.
             host.inject(MotionEvent.ACTION_UP, ipX, ipY, injDownTime, deviceId)
             ipX = anchorX
@@ -321,6 +430,11 @@ class ZoneView(ctx: Context, private val host: SensiOverlay) : View(ctx) {
             host.resetStrikes()
         }
         host.inject(MotionEvent.ACTION_UP, ipX, ipY, injDownTime, deviceId)
+        host.debug(
+            "A${Build.VERSION.SDK_INT} dev ${deviceId}>${injectDeviceId(deviceId)} | " +
+                (if (cancel) "AKHIR=CANCEL" else "AKHIR=UP") +
+                " ${SystemClock.uptimeMillis() - realDownAt}ms | gerak asli=$dbgMoves (sesudah suntik $dbgAfter) | disuntik=$dbgInj, pasang ulang=$dbgAnchor | mentah: ${host.rawStatus}, ${if (rawId < 0) "tidak terikat" else if (useRaw) "DIPAKAI" else "terikat"}"
+        )
         reset()
     }
 
@@ -328,12 +442,16 @@ class ZoneView(ctx: Context, private val host: SensiOverlay) : View(ctx) {
         state = S.IDLE
         trackedId = -1
         removeCallbacks(activate)
+        removeCallbacks(snap)
+        rawId = -1
+        useRaw = false
         host.setAway(this, false)
     }
 
     /** Dipanggil saat jendela dilepas: angkat jari suntik bila masih turun. */
     fun release() {
         removeCallbacks(activate)
+        removeCallbacks(snap)
         if (state == S.ACTIVE) {
             Shell.inject(MotionEvent.ACTION_UP, INJECT_ID, ipX, ipY, injDownTime, SystemClock.uptimeMillis(), injectDeviceId(deviceId))
         }

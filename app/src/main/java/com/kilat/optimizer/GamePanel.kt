@@ -295,6 +295,14 @@ class GamePanel(
         sensiStatus.textSize = 13f
         sensiStatus.typeface = Typeface.DEFAULT_BOLD
         sensiBox.addView(sensiStatus, lp(top = 2))
+        // Tahan lama untuk menyalakan mode uji (toast diagnosis tiap gestur zona).
+        sensiStatus.setOnLongClickListener {
+            val p = GameToolsPrefs.prefs(ctx)
+            val on = !p.getBoolean("sensi_debug", false)
+            p.edit().putBoolean("sensi_debug", on).apply()
+            android.widget.Toast.makeText(ctx, if (on) "Mode uji sensi: HIDUP" else "Mode uji sensi: MATI", android.widget.Toast.LENGTH_SHORT).show()
+            true
+        }
 
         sensiBox.addView(label("Posisi zona"), lp(top = 14))
         val posRow = LinearLayout(ctx).apply { orientation = LinearLayout.HORIZONTAL }
