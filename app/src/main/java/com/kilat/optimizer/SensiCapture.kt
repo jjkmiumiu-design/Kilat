@@ -26,7 +26,7 @@ internal fun injectDeviceId(realDeviceId: Int): Int =
     if (Build.VERSION.SDK_INT >= 35) 0 else realDeviceId
 
 /** Jeda setelah jendela zona dibuat tembus sentuh, sebelum jari pertama disuntikkan. */
-private const val ACTIVATE_DELAY_MS = 45L
+private const val ACTIVATE_DELAY_MS = 60L
 
 /** Gestur yang dibatalkan sistem secepat ini setelah dimulai dianggap tanda jendela tidak dipakai dengan benar. */
 private const val EARLY_CANCEL_MS = 250L
@@ -37,8 +37,8 @@ private const val MAX_STRIKES = 3
  * menangkap sentuhan di areanya, lalu menyuntikkan sentuhan yang sudah dilebarkan ke game.
  *
  * Cara kerja satu gestur:
- *  1. Jari menyentuh zona: jendela menangkapnya dan langsung dibuat tembus sentuh, supaya
- *     sentuhan yang disuntikkan tidak jatuh ke jendela ini lagi.
+ *  1. Jari menyentuh zona: jendela menangkapnya dan langsung digeser ke luar layar (gestur tetap
+ *     miliknya), supaya sentuhan yang disuntikkan tidak jatuh ke jendela ini lagi.
  *  2. Setelah [ACTIVATE_DELAY_MS], jari DOWN disuntikkan di titik awal.
  *  3. Setiap gerakan jari asli dikalikan sx dan sy, lalu disuntikkan sebagai gerakan.
  *  4. Jari diangkat: UP disuntikkan, jendela bisa disentuh lagi.
@@ -52,7 +52,7 @@ class SensiOverlay(
     private val screenSize: () -> Pair<Int, Int>,
     private val onUnsupported: () -> Unit,
 ) {
-    private class Entry(val view: ZoneView, val lp: WindowManager.LayoutParams)
+    private class Entry(val view: ZoneView, val lp: WindowManager.LayoutParams, val homeX: Int, val homeY: Int)
 
     private val entries = ArrayList<Entry>()
     private val main = Handler(Looper.getMainLooper())
@@ -112,7 +112,7 @@ class SensiOverlay(
             view.sy = data.yOf(z)
             try {
                 wm.addView(view, lp)
-                entries += Entry(view, lp)
+                entries += Entry(view, lp, lp.x, lp.y)
             } catch (e: Exception) {
                 // Izin overlay dicabut. Service yang menangani.
             }
@@ -136,12 +136,22 @@ class SensiOverlay(
 
     // ---------- dipanggil ZoneView ----------
 
-    fun setTouchable(v: ZoneView, touchable: Boolean) {
+    /**
+     * Menyingkirkan jendela zona dari bawah jari ([away] = true) atau mengembalikannya.
+     *
+     * Jendela digeser ke luar layar, bukan diberi FLAG_NOT_TOUCHABLE. Mengubah flag itu di tengah
+     * gestur membuat sistem bisa memutus aliran gerakan jari asli ke jendela ini, sehingga tombol
+     * tertekan tapi seretannya tidak pernah sampai. Menggeser jendela tidak memutus gestur (cara yang
+     * sama dipakai gelembung chat yang diseret), dan sentuhan suntikan jatuh ke game di bawahnya.
+     */
+    fun setAway(v: ZoneView, away: Boolean) {
         val e = entries.firstOrNull { it.view === v } ?: return
-        e.lp.flags = if (touchable) {
-            e.lp.flags and WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE.inv()
+        if (away) {
+            e.lp.x = -e.lp.width - 400
+            e.lp.y = e.homeY
         } else {
-            e.lp.flags or WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE
+            e.lp.x = e.homeX
+            e.lp.y = e.homeY
         }
         try {
             wm.updateViewLayout(v, e.lp)
@@ -244,8 +254,8 @@ class ZoneView(ctx: Context, private val host: SensiOverlay) : View(ctx) {
         pendingUp = false
         pendingCancel = false
         state = S.WAIT
-        // Jadikan jendela ini tembus sentuh supaya sentuhan suntikan langsung jatuh ke game.
-        host.setTouchable(this, false)
+        // Singkirkan jendela ini dari bawah jari supaya sentuhan suntikan langsung jatuh ke game.
+        host.setAway(this, true)
         postDelayed(activate, ACTIVATE_DELAY_MS)
     }
 
@@ -318,7 +328,7 @@ class ZoneView(ctx: Context, private val host: SensiOverlay) : View(ctx) {
         state = S.IDLE
         trackedId = -1
         removeCallbacks(activate)
-        host.setTouchable(this, true)
+        host.setAway(this, false)
     }
 
     /** Dipanggil saat jendela dilepas: angkat jari suntik bila masih turun. */
