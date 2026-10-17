@@ -23,7 +23,7 @@ enum class ShizukuStatus { NOT_RUNNING, NEEDS_PERMISSION, CONNECTING, READY }
  */
 object Shell {
     private const val REQUEST_CODE = 4242
-    private const val BIND_TIMEOUT_MS = 6000L
+    private const val BIND_TIMEOUT_MS = 15000L
 
     private var appContext: Context? = null
     private var service: IShellService? = null
@@ -67,12 +67,19 @@ object Shell {
         }
 
         override fun onServiceDisconnected(name: ComponentName) {
+            // Abaikan bila layanan yang sedang dipakai masih hidup (pemberitahuan dari sambungan lama).
+            // Tanpa ini status bisa bolak-balik Siap/Tidak.
+            if (service?.asBinder()?.pingBinder() == true) return
             service = null
             injectReady = null
             binding = false
-            refresh()
+            // Tunda sebentar supaya tidak terjadi putaran sambung-putus yang rapat.
+            main.removeCallbacks(delayedRefresh)
+            main.postDelayed(delayedRefresh, 1500)
         }
     }
+
+    private val delayedRefresh = Runnable { refresh() }
 
     private val onBinderReceived = Shizuku.OnBinderReceivedListener { refresh() }
 
@@ -133,7 +140,8 @@ object Shell {
         val ctx = appContext ?: return
         binding = true
         lastBindAt = android.os.SystemClock.elapsedRealtime()
-        _status.value = ShizukuStatus.CONNECTING
+        // Saat jalur cadangan sudah aktif, status tetap READY supaya tampilan tidak bolak-balik.
+        if (!useProcess) _status.value = ShizukuStatus.CONNECTING
         main.removeCallbacks(timeout)
         main.postDelayed(timeout, BIND_TIMEOUT_MS)
         try {
@@ -220,19 +228,14 @@ object Shell {
         ok
     }
 
-    private const val REBIND_MS = 8000L
+    private const val REBIND_MS = 20000L
 
     /** Dari thread utama: bila Shizuku siap tetapi UserService belum ada (jalur cadangan), coba bind lagi. */
     private fun rebindIfStuck() {
         if (service != null || binding) return
         if (!Shizuku.pingBinder() || Shizuku.checkSelfPermission() != PackageManager.PERMISSION_GRANTED) return
         if (android.os.SystemClock.elapsedRealtime() - lastBindAt < REBIND_MS) return
-        try {
-            userArgs?.let { Shizuku.unbindUserService(it, connection, false) }
-        } catch (e: Throwable) {
-            // tidak ada yang perlu dilepas
-        }
-        useProcess = false
+        // Jangan unbind dulu: itu mematikan UserService yang mungkin baru saja tersambung.
         bind()
     }
 
