@@ -30,7 +30,7 @@ object License {
 
     /** Public key. Ganti dengan hasil `python make_key.py init` milikmu sendiri. */
     private const val PUBLIC_KEY_B64 =
-        "MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAEoDhLhhxWZQ9YCyEuoe8hcy5D/Dine89av5nnzPFHcVx3FHcKM0RNUQTmBdMHe2row/HGeNaAyVL7AcR/azTk9A=="
+        "MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAEt7IbZv9cpBOPLJ6wTY8kN3TjYTAhhXWrTkNtvlcBRHDvx62jMJ+W25sWRKv+kCKketC3XsDpkvTalAyQfjFXow=="
 
     private const val PREFS = "kilat_license"
     private const val KEY_SAVED = "key"
