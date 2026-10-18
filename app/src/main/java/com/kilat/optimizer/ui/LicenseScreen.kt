@@ -14,6 +14,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.systemBarsPadding
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
@@ -106,40 +107,28 @@ fun LicenseScreen(notice: String? = null, onUnlocked: (LicenseResult.Valid) -> U
 
     Box(Modifier.fillMaxSize().background(k.bg).systemBarsPadding()) {
         Column(
-            Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(20.dp),
-            horizontalAlignment = Alignment.CenterHorizontally,
+            Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(horizontal = 24.dp, vertical = 20.dp),
             verticalArrangement = Arrangement.Center,
         ) {
-            Box(
-                Modifier.size(64.dp).clip(RoundedCornerShape(18.dp)).background(k.accent),
-                contentAlignment = Alignment.Center,
-            ) { Icon(Icons.Outlined.Bolt, null, tint = k.accentInk, modifier = Modifier.size(38.dp)) }
-            Spacer(Modifier.height(14.dp))
-            Text("Kilat", color = k.fg, fontSize = 34.sp, fontWeight = FontWeight.Bold)
-            Text("Masukkan license key untuk lanjut", color = k.muted, fontSize = 14.sp)
-            Spacer(Modifier.height(24.dp))
+            Column(Modifier.widthIn(max = 420.dp).fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(14.dp)) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    BoltMark(36.dp, k.accent)
+                    Spacer(Modifier.width(10.dp))
+                    Txt("Kilat", 34, FontWeight.Medium, display = true)
+                }
+                Txt("Masukkan license key untuk lanjut.", 15, color = k.muted)
+                Spacer(Modifier.height(6.dp))
 
-            val shape = RoundedCornerShape(24.dp)
-            Column(
-                Modifier.widthIn(max = 420.dp).fillMaxWidth().clip(shape).background(k.surface)
-                    .border(1.dp, k.line, shape).padding(18.dp),
-                verticalArrangement = Arrangement.spacedBy(12.dp),
-            ) {
                 // Status Shizuku
                 val (txt, col) = when (status) {
                     ShizukuStatus.READY -> "Shizuku siap" to k.good
                     ShizukuStatus.CONNECTING -> "Menyambungkan ke Shizuku…" to k.warn
                     ShizukuStatus.NEEDS_PERMISSION -> "Shizuku butuh izin" to k.warn
-                    ShizukuStatus.NOT_RUNNING -> "Shizuku belum berjalan" to k.accent
+                    ShizukuStatus.NOT_RUNNING -> "Shizuku belum berjalan" to k.bad
                 }
-                Row(
-                    Modifier.fillMaxWidth().clip(RoundedCornerShape(14.dp)).background(k.surface2)
-                        .padding(horizontal = 14.dp, vertical = 12.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(10.dp),
-                ) {
-                    Box(Modifier.size(10.dp).clip(CircleShape).background(col))
-                    Text(txt, color = k.fg, fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Lamp(col)
+                    Txt(txt, 14, FontWeight.Medium)
                 }
 
                 OutlinedTextField(
@@ -160,17 +149,17 @@ fun LicenseScreen(notice: String? = null, onUnlocked: (LicenseResult.Valid) -> U
                     },
                     visualTransformation = if (show) VisualTransformation.None else PasswordVisualTransformation(),
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
-                    shape = RoundedCornerShape(16.dp),
+                    shape = RoundedCornerShape(8.dp),
                     colors = OutlinedTextFieldDefaults.colors(
                         focusedTextColor = k.fg, unfocusedTextColor = k.fg,
-                        focusedBorderColor = k.accent, unfocusedBorderColor = k.line,
-                        focusedLabelColor = k.accent, unfocusedLabelColor = k.muted,
-                        cursorColor = k.accent, errorBorderColor = k.accent, errorLabelColor = k.accent,
+                        focusedBorderColor = k.fg, unfocusedBorderColor = k.line,
+                        focusedLabelColor = k.fg, unfocusedLabelColor = k.muted,
+                        cursorColor = k.fg, errorBorderColor = k.bad, errorLabelColor = k.bad,
                     ),
                     modifier = Modifier.fillMaxWidth(),
                 )
 
-                error?.let { Text(it, color = k.accent, fontSize = 13.sp) }
+                error?.let { Text(it, color = k.bad, fontSize = 13.sp) }
                 info?.let { Text(it, color = k.muted, fontSize = 13.sp) }
                 Text(
                     "Untuk key berdurasi, waktu mulai berjalan saat key pertama kali dimasukkan.",
@@ -191,20 +180,16 @@ fun LicenseScreen(notice: String? = null, onUnlocked: (LicenseResult.Valid) -> U
                     Text("Ingat saya", color = k.muted, fontSize = 14.sp)
                 }
 
-                Box(
-                    Modifier.fillMaxWidth().clip(RoundedCornerShape(16.dp)).background(k.accent)
-                        .clickable(enabled = key.isNotBlank() && !busy) { submit() }
-                        .padding(vertical = 15.dp),
-                    contentAlignment = Alignment.Center,
-                ) {
-                    Text(
-                        if (busy) "Memeriksa…" else "Masuk",
-                        color = k.accentInk.copy(alpha = if (key.isNotBlank()) 1f else 0.5f),
-                        fontSize = 17.sp, fontWeight = FontWeight.Bold,
-                    )
-                }
+                KButton(
+                    if (busy) "Memeriksa…" else "Masuk",
+                    { submit() },
+                    Modifier.fillMaxWidth(),
+                    enabled = key.isNotBlank() && !busy,
+                )
 
                 // Model dan HWID, untuk key yang diikat ke satu HP
+                Spacer(Modifier.height(10.dp))
+                Rule()
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
                         Text("Perangkat", color = k.muted, fontSize = 12.sp)
@@ -219,7 +204,7 @@ fun LicenseScreen(notice: String? = null, onUnlocked: (LicenseResult.Valid) -> U
                     TextButton(onClick = {
                         clipboard.setText(AnnotatedString("Perangkat: $model\nHWID: $hwid"))
                         info = "Model dan HWID disalin"
-                    }) { Text("Salin", color = k.accent) }
+                    }) { Text("Salin", color = k.link, fontWeight = FontWeight.Bold) }
                 }
             }
         }
