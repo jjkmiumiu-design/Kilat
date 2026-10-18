@@ -13,8 +13,8 @@ import android.widget.TextView
 import java.util.Locale
 import kotlin.math.roundToInt
 
-internal val GOOD = Color.rgb(0x4C, 0xC3, 0x8A)
-internal val BAD = Color.rgb(0xFF, 0x6B, 0x6B)
+internal val GOOD = Color.rgb(0x6F, 0xBF, 0x86)
+internal val BAD = Color.rgb(0xEE, 0x5A, 0x4D)
 
 /** Tombol bulat kecil bertuliskan satu karakter, dipakai untuk − dan +. */
 internal fun roundButton(ctx: Context, text: String, onClick: () -> Unit): TextView {
