@@ -23,6 +23,7 @@ import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.systemBarsPadding
@@ -125,80 +126,71 @@ internal fun Txt(
     color: Color = LocalK.current.fg,
     align: TextAlign? = null,
     modifier: Modifier = Modifier,
+    display: Boolean = false,
 ) {
-    Text(text, modifier = modifier, color = color, fontSize = size.sp, fontWeight = weight, textAlign = align)
+    Text(
+        text, modifier = modifier, color = color, fontSize = size.sp, fontWeight = weight, textAlign = align,
+        fontFamily = if (display) KFont.display else KFont.body,
+    )
 }
 
+/** Bagian layar: garis di atas, isi di bawahnya. Bukan kartu. */
 @Composable
 internal fun KCard(
     modifier: Modifier = Modifier,
     onClick: (() -> Unit)? = null,
     content: @Composable ColumnScope.() -> Unit,
 ) {
-    val k = LocalK.current
-    val shape = RoundedCornerShape(18.dp)
-    val base = modifier.clip(shape).background(k.surface).border(1.dp, k.line, shape)
-    Column(
-        modifier = (if (onClick != null) base.clickable(onClick = onClick) else base).padding(14.dp),
-        content = content,
-    )
+    Column(modifier) {
+        Rule()
+        val inner = if (onClick != null) Modifier.fillMaxWidth().clickable(onClick = onClick) else Modifier.fillMaxWidth()
+        Column(modifier = inner.padding(vertical = 14.dp), content = content)
+    }
 }
 
 @Composable
 internal fun Label(text: String) {
-    Txt(text, 12, FontWeight.Medium, LocalK.current.muted, modifier = Modifier.padding(start = 2.dp, top = 6.dp))
+    Txt(text, 12, FontWeight.SemiBold, LocalK.current.muted, modifier = Modifier.padding(top = 22.dp, bottom = 4.dp))
 }
 
 @Composable
 internal fun SwitchRow(title: String, desc: String, checked: Boolean, enabled: Boolean = true, onToggle: () -> Unit) {
     val k = LocalK.current
-    Row(
-        Modifier.fillMaxWidth().padding(vertical = 10.dp),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(14.dp),
-    ) {
-        Column(Modifier.weight(1f)) {
-            Txt(title, 15, FontWeight.SemiBold)
-            if (desc.isNotEmpty()) Txt(desc, 13, color = k.muted)
+    Column {
+        Rule()
+        Row(
+            Modifier.fillMaxWidth().padding(vertical = 12.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(16.dp),
+        ) {
+            Column(Modifier.weight(1f)) {
+                Txt(title, 16)
+                if (desc.isNotEmpty()) Txt(desc, 13, color = k.muted)
+            }
+            KToggle(checked = checked, onChange = { onToggle() }, enabled = enabled)
         }
-        Switch(
-            checked = checked,
-            onCheckedChange = { onToggle() },
-            enabled = enabled,
-            colors = SwitchDefaults.colors(
-                checkedTrackColor = k.accent, checkedThumbColor = k.accentInk,
-                uncheckedTrackColor = k.track, uncheckedThumbColor = k.fg,
-                uncheckedBorderColor = k.line,
-            ),
-        )
     }
-}
-
-@Composable
-private fun ActionButton(text: String, onClick: () -> Unit) {
-    val k = LocalK.current
-    val shape = RoundedCornerShape(14.dp)
-    Box(
-        Modifier.fillMaxWidth().clip(shape).background(k.surface2).border(1.dp, k.line, shape)
-            .clickable(onClick = onClick).padding(vertical = 14.dp),
-        contentAlignment = Alignment.Center,
-    ) { Txt(text, 15, FontWeight.SemiBold) }
 }
 
 @Composable
 internal fun ScreenFrame(title: String, back: () -> Unit, content: @Composable ColumnScope.() -> Unit) {
     val k = LocalK.current
-    Column(
-        Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(horizontal = 16.dp, vertical = 8.dp),
-        verticalArrangement = Arrangement.spacedBy(4.dp),
-    ) {
-        Row(verticalAlignment = Alignment.CenterVertically) {
+    Column(Modifier.fillMaxSize()) {
+        Row(
+            Modifier.fillMaxWidth().height(56.dp).padding(horizontal = 4.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
             IconButton(onClick = back) {
                 Icon(Icons.AutoMirrored.Outlined.ArrowBack, contentDescription = "Kembali", tint = k.fg)
             }
-            Txt(title, 22, FontWeight.Bold)
+            Txt(title, 20, FontWeight.Medium, display = true, modifier = Modifier.padding(start = 4.dp))
         }
-        content()
+        Column(
+            Modifier.weight(1f).fillMaxWidth().verticalScroll(rememberScrollState())
+                .padding(horizontal = 16.dp, vertical = 4.dp),
+            verticalArrangement = Arrangement.spacedBy(4.dp),
+            content = content,
+        )
     }
 }
 
@@ -208,46 +200,52 @@ internal fun ScreenFrame(title: String, back: () -> Unit, content: @Composable C
 private fun Home(ui: Ui, vm: MainViewModel, license: LicenseResult.Valid, go: (String) -> Unit) {
     val ctx = LocalContext.current
     val k = LocalK.current
+    val total = TWEAKS.size
+    val on = TWEAKS.count { it.id in ui.active }
+    val display = TWEAKS.filter { it.group == Group.DISPLAY }
+    val touch = TWEAKS.filter { it.group == Group.TOUCH }
     Column(
-        Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp),
-        verticalArrangement = Arrangement.spacedBy(14.dp),
+        Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(horizontal = 16.dp, vertical = 12.dp),
     ) {
-        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-            Box(
-                Modifier.size(34.dp).clip(RoundedCornerShape(10.dp)).background(k.accent),
-                contentAlignment = Alignment.Center,
-            ) { Icon(Icons.Outlined.Bolt, null, tint = k.accentInk, modifier = Modifier.size(20.dp)) }
-            Txt("Kilat", 22, FontWeight.Bold)
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            BoltMark(20.dp, k.accent)
+            Spacer(Modifier.width(8.dp))
+            Txt("Kilat", 22, FontWeight.Medium, display = true, modifier = Modifier.weight(1f))
+            ShizukuState(ui.status)
         }
+        ShizukuAction(ui.status, onPermission = { Shell.requestPermission() }, onOpen = { openShizuku(ctx) })
 
-        StatusBanner(ui.status, onPermission = { Shell.requestPermission() }, onOpen = { openShizuku(ctx) })
-        LicenseChip(license)
-        Hero(ui, onOptimize = vm::optimizeAll, onRevert = vm::revertAll)
-        StatsGrid(ui)
+        Spacer(Modifier.height(24.dp))
+        Txt("$on dari $total tweak aktif", 20, FontWeight.Medium, display = true)
+        Txt(ago(ui.lastAt), 13, color = k.muted)
+        Spacer(Modifier.height(14.dp))
+        KButton(
+            if (ui.busy && ui.progress.isNotEmpty()) ui.progress else "Optimalkan semua",
+            vm::optimizeAll, Modifier.fillMaxWidth(), enabled = !ui.busy,
+        )
+        Spacer(Modifier.height(8.dp))
+        KButton("Kembalikan semua", vm::revertAll, Modifier.fillMaxWidth(), primary = false, enabled = !ui.busy)
 
-        Label("MODUL")
-        val display = TWEAKS.filter { it.group == Group.DISPLAY }
-        val touch = TWEAKS.filter { it.group == Group.TOUCH }
-        Row(Modifier.height(IntrinsicSize.Min), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-            ModuleTile(
-                Modifier.weight(1f).fillMaxHeight(), Icons.Outlined.DeleteSweep, "Bloat",
-                if (ui.bloat.isEmpty()) "Pilih aplikasi" else "${ui.bloat.count { it.on }} dimatikan",
-            ) { go("bloat") }
-            ModuleTile(
-                Modifier.weight(1f).fillMaxHeight(), Icons.Outlined.Smartphone, "Tampilan",
-                "${display.count { it.id in ui.active }} dari ${display.size} aktif",
-            ) { go("display") }
-        }
-        Row(Modifier.height(IntrinsicSize.Min), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-            ModuleTile(
-                Modifier.weight(1f).fillMaxHeight(), Icons.Outlined.TouchApp, "Sentuhan",
-                "${touch.count { it.id in ui.active }} dari ${touch.size} aktif",
-            ) { go("touch") }
-            ModuleTile(
-                Modifier.weight(1f).fillMaxHeight(), Icons.Outlined.SportsEsports, "Game",
-                if (ui.games.isEmpty()) "Pilih game" else "${ui.games.count { it.on }} mode performa",
-            ) { go("games") }
-        }
+        Label("Modul")
+        NavRow(
+            "Aplikasi bawaan",
+            if (ui.bloat.isEmpty()) "Pilih aplikasi yang dimatikan" else "${ui.bloat.count { it.on }} dimatikan",
+            Icons.Outlined.DeleteSweep,
+        ) { go("bloat") }
+        NavRow("Tampilan", "${display.count { it.id in ui.active }} dari ${display.size} aktif", Icons.Outlined.Smartphone) { go("display") }
+        NavRow("Sentuhan", "${touch.count { it.id in ui.active }} dari ${touch.size} aktif", Icons.Outlined.TouchApp) { go("touch") }
+        NavRow(
+            "Game",
+            if (ui.games.isEmpty()) "Pilih game" else "${ui.games.count { it.on }} mode performa",
+            Icons.Outlined.SportsEsports,
+        ) { go("games") }
+        Rule()
+
+        Label("Perangkat")
+        Facts(ui)
+
+        Spacer(Modifier.height(24.dp))
+        LicenseLine(license)
     }
 }
 
@@ -258,34 +256,38 @@ private fun openShizuku(ctx: Context) {
 }
 
 @Composable
-private fun StatusBanner(status: ShizukuStatus, onPermission: () -> Unit, onOpen: () -> Unit) {
+private fun ShizukuState(status: ShizukuStatus) {
     val k = LocalK.current
     val (text, color) = when (status) {
         ShizukuStatus.READY -> "Shizuku siap" to k.good
-        ShizukuStatus.CONNECTING -> "Menyambungkan ke Shizuku…" to k.warn
-        ShizukuStatus.NEEDS_PERMISSION -> "Shizuku butuh izin" to k.warn
-        ShizukuStatus.NOT_RUNNING -> "Shizuku belum berjalan" to k.accent
+        ShizukuStatus.CONNECTING -> "Menyambung…" to k.warn
+        ShizukuStatus.NEEDS_PERMISSION -> "Butuh izin" to k.warn
+        ShizukuStatus.NOT_RUNNING -> "Belum jalan" to k.bad
     }
-    val shape = RoundedCornerShape(14.dp)
-    Row(
-        Modifier.fillMaxWidth().clip(shape).background(k.surface).border(1.dp, k.line, shape)
-            .padding(horizontal = 14.dp, vertical = 6.dp),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(10.dp),
-    ) {
-        Box(Modifier.size(10.dp).clip(CircleShape).background(color))
-        Txt(text, 14, FontWeight.SemiBold, modifier = Modifier.weight(1f))
-        when (status) {
-            ShizukuStatus.NEEDS_PERMISSION -> TextButton(onClick = onPermission) { Text("Beri izin", color = k.accent) }
-            ShizukuStatus.NOT_RUNNING -> TextButton(onClick = onOpen) { Text("Buka Shizuku", color = k.accent) }
-            else -> Spacer(Modifier.height(36.dp))
+    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(7.dp)) {
+        Lamp(color)
+        Txt(text, 13, FontWeight.Medium, k.muted)
+    }
+}
+
+/** Tombol tindakan bila Shizuku belum siap. Tidak tampil sama sekali saat semuanya beres. */
+@Composable
+private fun ShizukuAction(status: ShizukuStatus, onPermission: () -> Unit, onOpen: () -> Unit) {
+    val k = LocalK.current
+    when (status) {
+        ShizukuStatus.NEEDS_PERMISSION -> TextButton(onClick = onPermission, modifier = Modifier.offset(x = (-12).dp)) {
+            Text("Beri izin Shizuku", color = k.link, fontWeight = FontWeight.Bold)
         }
+        ShizukuStatus.NOT_RUNNING -> TextButton(onClick = onOpen, modifier = Modifier.offset(x = (-12).dp)) {
+            Text("Buka Shizuku", color = k.link, fontWeight = FontWeight.Bold)
+        }
+        else -> Unit
     }
 }
 
 /** Status lisensi: sisa waktu berjalan. Hanya bagian ini yang diperbarui tiap detik. */
 @Composable
-private fun LicenseChip(info: LicenseResult.Valid) {
+private fun LicenseLine(info: LicenseResult.Valid) {
     val k = LocalK.current
     val now by produceState(System.currentTimeMillis()) {
         while (true) {
@@ -297,24 +299,18 @@ private fun LicenseChip(info: LicenseResult.Valid) {
     val remain = if (unlimited) Long.MAX_VALUE else (info.expiresAtMs - now).coerceAtLeast(0L)
     val color = when {
         unlimited -> k.good
-        remain < 3_600_000L -> k.accent
+        remain < 3_600_000L -> k.bad
         remain < 86_400_000L -> k.warn
         else -> k.good
     }
-    val title = if (info.name.isBlank()) "Lisensi aktif" else "Lisensi aktif · ${info.name}"
+    val title = if (info.name.isBlank()) "Lisensi aktif" else "Lisensi aktif untuk ${info.name}"
     val sub = if (unlimited) "Tanpa batas waktu"
-    else "Sisa ${formatRemaining(remain)} · ${formatExpiry(info.expiresAtMs)}"
+    else "Sisa ${formatRemaining(remain)}, ${formatExpiry(info.expiresAtMs)}"
 
-    val shape = RoundedCornerShape(14.dp)
-    Row(
-        Modifier.fillMaxWidth().clip(shape).background(k.surface).border(1.dp, k.line, shape)
-            .padding(horizontal = 14.dp, vertical = 10.dp),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(10.dp),
-    ) {
-        Box(Modifier.size(10.dp).clip(CircleShape).background(color))
-        Column(Modifier.weight(1f)) {
-            Txt(title, 14, FontWeight.SemiBold)
+    Row(verticalAlignment = Alignment.Top, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+        Box(Modifier.padding(top = 6.dp)) { Lamp(color) }
+        Column {
+            Txt(title, 14, FontWeight.Medium)
             Txt(sub, 12, color = if (remain < 86_400_000L) color else k.muted)
         }
     }
@@ -332,116 +328,60 @@ private fun ago(ms: Long): String {
 }
 
 @Composable
-private fun Hero(ui: Ui, onOptimize: () -> Unit, onRevert: () -> Unit) {
-    val k = LocalK.current
-    val shape = RoundedCornerShape(22.dp)
-    Column(
-        Modifier.fillMaxWidth().clip(shape).background(k.surface).border(1.dp, k.line, shape).padding(18.dp),
-        horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.spacedBy(14.dp),
-    ) {
-        ScoreRing(ui.score)
-        Txt(ago(ui.lastAt), 13, color = k.muted)
-
-        val ctaShape = RoundedCornerShape(16.dp)
-        Box(
-            Modifier.fillMaxWidth().clip(ctaShape).background(k.accent)
-                .clickable(enabled = !ui.busy, onClick = onOptimize).padding(vertical = 16.dp),
-            contentAlignment = Alignment.Center,
-        ) {
-            Txt(if (ui.busy && ui.progress.isNotEmpty()) ui.progress else "Optimalkan semua", 18, FontWeight.Bold, k.accentInk)
-        }
-
-        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.Center) {
-            TextButton(onClick = onRevert, enabled = !ui.busy) {
-                Icon(Icons.Outlined.Replay, null, tint = k.muted, modifier = Modifier.size(18.dp))
-                Spacer(Modifier.width(8.dp))
-                Text("Kembalikan semua", color = k.muted, fontWeight = FontWeight.SemiBold)
-            }
-        }
-    }
-}
-
-@Composable
-private fun ScoreRing(score: Int) {
-    val k = LocalK.current
-    val sweep by animateFloatAsState(360f * score / 100f, tween(900), label = "ring")
-    val color = when {
-        score < 70 -> k.accent
-        score < 85 -> k.warn
-        else -> k.good
-    }
-    Box(Modifier.size(168.dp), contentAlignment = Alignment.Center) {
-        Canvas(Modifier.fillMaxSize().padding(6.dp)) {
-            val stroke = 10.dp.toPx()
-            drawArc(color = k.track, startAngle = 0f, sweepAngle = 360f, useCenter = false, style = Stroke(stroke))
-            drawArc(
-                color = color, startAngle = -90f, sweepAngle = sweep, useCenter = false,
-                style = Stroke(stroke, cap = StrokeCap.Round),
-            )
-        }
-        Column(horizontalAlignment = Alignment.CenterHorizontally) {
-            Row(verticalAlignment = Alignment.Bottom) {
-                Txt("$score", 50, FontWeight.Bold)
-                Txt("/100", 16, color = k.muted, modifier = Modifier.padding(bottom = 8.dp))
-            }
-            Txt("SKOR TWEAK", 11, FontWeight.Medium, k.muted)
-        }
-    }
-}
-
-@Composable
-private fun StatsGrid(ui: Ui) {
+private fun Facts(ui: Ui) {
     val k = LocalK.current
     val s = ui.stats
-    Row(Modifier.height(IntrinsicSize.Min), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-        KCard(Modifier.weight(1f).fillMaxHeight()) {
-            Txt("RAM", 13, color = k.muted)
-            Txt(s?.let { "%.1f GB".format(it.ramTotalGb) } ?: "-", 22, FontWeight.Bold)
-            Txt(s?.let { "%.1f GB terpakai".format(it.ramUsedGb) } ?: "", 13, color = k.muted)
-            if (s != null) Meter((s.ramUsedGb / s.ramTotalGb).toFloat(), k.good)
-        }
-        KCard(Modifier.weight(1f).fillMaxHeight()) {
-            Txt("CPU", 13, color = k.muted)
-            Txt(ui.governor, 22, FontWeight.Bold)
-            Txt("governor", 13, color = k.muted)
-        }
-    }
-    Row(Modifier.height(IntrinsicSize.Min), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-        KCard(Modifier.weight(1f).fillMaxHeight()) {
-            Txt("Baterai", 13, color = k.muted)
-            Txt(s?.let { "${it.battery}%" } ?: "-", 22, FontWeight.Bold)
-            Txt(s?.let { "%.1f °C".format(it.tempC) } ?: "", 13, color = k.muted)
-        }
-        KCard(Modifier.weight(1f).fillMaxHeight()) {
-            Txt("Penyimpanan", 13, color = k.muted)
-            Txt(s?.let { "%.0f GB".format(it.storageFreeGb) } ?: "-", 22, FontWeight.Bold)
-            Txt(s?.let { "${it.storageUsedPct}% terpakai" } ?: "", 13, color = k.muted)
-            if (s != null) Meter(s.storageUsedPct / 100f, if (s.storageUsedPct > 85) k.warn else k.good)
+    FactRow(
+        "RAM",
+        s?.let { "%.1f dari %.1f GB".format(it.ramUsedGb, it.ramTotalGb) } ?: "-",
+        s?.let { (it.ramUsedGb / it.ramTotalGb).toFloat() },
+    )
+    FactRow(
+        "Penyimpanan",
+        s?.let { "%.0f GB kosong".format(it.storageFreeGb) } ?: "-",
+        s?.let { it.storageUsedPct / 100f },
+        if ((s?.storageUsedPct ?: 0) > 85) k.warn else k.good,
+    )
+    FactRow("Baterai", s?.let { "${it.battery}%  ·  " + "%.1f °C".format(it.tempC) } ?: "-")
+    FactRow("CPU governor", ui.governor)
+    Rule()
+}
+
+@Composable
+private fun FactRow(label: String, value: String, fraction: Float? = null, color: Color = Color.Unspecified) {
+    val k = LocalK.current
+    Column {
+        Rule()
+        Column(Modifier.padding(vertical = 11.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Txt(label, 14, color = k.muted, modifier = Modifier.weight(1f))
+                Txt(value, 15, FontWeight.Medium)
+            }
+            if (fraction != null) Meter(fraction, if (color == Color.Unspecified) k.good else color)
         }
     }
 }
 
+/** Baris menu: ikon di kiri, nama modul dan keterangannya, panah di kanan. */
 @Composable
-private fun Meter(fraction: Float, color: Color) {
+private fun NavRow(title: String, sub: String, icon: ImageVector? = null, onClick: () -> Unit) {
     val k = LocalK.current
-    Spacer(Modifier.height(8.dp))
-    Box(Modifier.fillMaxWidth().height(5.dp).clip(CircleShape).background(k.track)) {
-        Box(Modifier.fillMaxWidth(fraction.coerceIn(0f, 1f)).fillMaxHeight().clip(CircleShape).background(color))
-    }
-}
-
-@Composable
-private fun ModuleTile(modifier: Modifier, icon: ImageVector, title: String, sub: String, onClick: () -> Unit) {
-    val k = LocalK.current
-    KCard(modifier, onClick) {
-        Box(
-            Modifier.size(38.dp).clip(RoundedCornerShape(11.dp)).background(k.surface2),
-            contentAlignment = Alignment.Center,
-        ) { Icon(icon, null, tint = k.accent, modifier = Modifier.size(22.dp)) }
-        Spacer(Modifier.height(10.dp))
-        Txt(title, 17, FontWeight.Bold)
-        Txt(sub, 12, color = k.muted)
+    Column {
+        Rule()
+        Row(
+            Modifier.fillMaxWidth().clickable(onClick = onClick).padding(vertical = 12.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            if (icon != null) {
+                Icon(icon, contentDescription = null, tint = k.muted, modifier = Modifier.size(24.dp))
+                Spacer(Modifier.width(16.dp))
+            }
+            Column(Modifier.weight(1f)) {
+                Txt(title, 16)
+                Txt(sub, 13, color = k.muted)
+            }
+            Txt("›", 22, color = k.muted)
+        }
     }
 }
 
@@ -469,13 +409,13 @@ private fun DisplayField(value: String, onChange: (String) -> Unit, hint: String
         singleLine = true,
         placeholder = { Text(hint, color = k.muted) },
         keyboardOptions = KeyboardOptions(keyboardType = if (number) KeyboardType.Number else KeyboardType.Ascii),
-        shape = RoundedCornerShape(14.dp),
+        shape = RoundedCornerShape(8.dp),
         colors = OutlinedTextFieldDefaults.colors(
             focusedTextColor = k.fg,
             unfocusedTextColor = k.fg,
-            focusedBorderColor = k.accent,
+            focusedBorderColor = k.fg,
             unfocusedBorderColor = k.line,
-            cursorColor = k.accent,
+            cursorColor = k.fg,
         ),
         modifier = Modifier.fillMaxWidth(),
     )
@@ -490,18 +430,15 @@ private fun DisplayEditor(ui: Ui, vm: MainViewModel) {
     var name by rememberSaveable { mutableStateOf("") }
 
     Spacer(Modifier.height(12.dp))
-    Label("RESOLUSI DAN DENSITY")
+    Label("Resolusi dan density")
 
-    // Peringatan
-    val warnShape = RoundedCornerShape(14.dp)
-    Box(
-        Modifier.fillMaxWidth().clip(warnShape).background(k.accent.copy(alpha = 0.12f))
-            .border(1.dp, k.accent.copy(alpha = 0.4f), warnShape).padding(14.dp),
-    ) {
+    // Peringatan: garis merah di kiri, teks biasa.
+    Row(Modifier.fillMaxWidth().height(IntrinsicSize.Min).background(k.surface)) {
+        Box(Modifier.width(4.dp).fillMaxHeight().background(k.warn))
         Txt(
             "Perubahan langsung berlaku saat kamu ketuk Terapkan. Bila layar jadi sulit dipakai, " +
                 "buka lagi menu ini dan ketuk Kembalikan bawaan perangkat.",
-            13, color = k.accent,
+            13, modifier = Modifier.padding(14.dp),
         )
     }
 
@@ -510,13 +447,13 @@ private fun DisplayEditor(ui: Ui, vm: MainViewModel) {
         if (d == null) {
             Txt("Hubungkan Shizuku untuk membaca ukuran layar.", 14, color = k.muted)
         } else {
-            Txt("FISIK", 11, FontWeight.Medium, k.muted)
-            Txt("${d.physW}x${d.physH} · ${d.physDpi} dpi", 18, FontWeight.Bold)
+            Txt("Fisik", 13, color = k.muted)
+            Txt("${d.physW}x${d.physH}, ${d.physDpi} dpi", 18, FontWeight.Medium, display = true)
             Spacer(Modifier.height(10.dp))
-            Txt("SAAT INI", 11, FontWeight.Medium, k.muted)
+            Txt("Saat ini", 13, color = k.muted)
             Txt(
-                if (d.hasOverride) "${d.curW}x${d.curH} · ${d.curDpi} dpi" else "Bawaan perangkat",
-                16, FontWeight.SemiBold,
+                if (d.hasOverride) "${d.curW}x${d.curH}, ${d.curDpi} dpi" else "Bawaan perangkat",
+                18, FontWeight.Medium, display = true,
             )
             Txt("Smallest width ~${d.smallestDp}dp", 13, color = k.muted)
         }
@@ -530,12 +467,7 @@ private fun DisplayEditor(ui: Ui, vm: MainViewModel) {
         Spacer(Modifier.height(8.dp))
         DisplayField(dpi, { dpi = it }, "Density, contoh 420", true)
         Spacer(Modifier.height(10.dp))
-        Box(
-            Modifier.fillMaxWidth().clip(RoundedCornerShape(14.dp)).background(k.accent)
-                .clickable(enabled = d != null) { vm.applyDisplay(res, dpi) }
-                .padding(vertical = 14.dp),
-            contentAlignment = Alignment.Center,
-        ) { Txt("Terapkan", 15, FontWeight.Bold, k.accentInk) }
+        KButton("Terapkan", { vm.applyDisplay(res, dpi) }, Modifier.fillMaxWidth(), enabled = d != null)
         Spacer(Modifier.height(12.dp))
         DisplayField(name, { name = it }, "Nama preset", false)
         TextButton(onClick = { vm.savePreset(name, res, dpi) }, modifier = Modifier.fillMaxWidth()) {
@@ -546,7 +478,7 @@ private fun DisplayEditor(ui: Ui, vm: MainViewModel) {
 
     // Preset
     KCard(Modifier.fillMaxWidth()) {
-        Txt("PRESET TERSIMPAN", 11, FontWeight.Medium, k.muted)
+        Txt("Preset tersimpan", 13, color = k.muted)
         PresetRow("Bawaan perangkat", "Resolusi dan density bawaan", onLoad = {
             if (d != null) {
                 res = "${d.physW}x${d.physH}"
@@ -566,75 +498,9 @@ private fun DisplayEditor(ui: Ui, vm: MainViewModel) {
         }
     }
 
-    ActionButton("Kembalikan bawaan perangkat", vm::resetDisplay)
+    KButton("Kembalikan bawaan perangkat", vm::resetDisplay, Modifier.fillMaxWidth(), primary = false)
     Txt("Mengembalikan resolusi dan density ke bawaan langsung tanpa konfirmasi.", 12, color = k.muted)
 }
 
 @Composable
-private fun PresetRow(title: String, detail: String, onLoad: () -> Unit, onDelete: (() -> Unit)?) {
-    val k = LocalK.current
-    Row(
-        Modifier.fillMaxWidth().padding(vertical = 6.dp),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        Column(Modifier.weight(1f)) {
-            Txt(title, 15, FontWeight.SemiBold)
-            Txt(detail, 13, color = k.muted)
-        }
-        TextButton(onClick = onLoad) { Text("Muat", color = k.accent) }
-        if (onDelete != null) {
-            TextButton(onClick = onDelete) { Text("Hapus", color = k.muted) }
-        }
-    }
-}
-
-@Composable
-private fun BloatScreen(ui: Ui, vm: MainViewModel, back: () -> Unit) {
-    val k = LocalK.current
-    ScreenFrame("Aplikasi bawaan", back) {
-        ActionButton("Tutup proses latar belakang", vm::killBackground)
-        Spacer(Modifier.height(8.dp))
-        ActionButton("Bersihkan cache semua aplikasi", vm::trimCaches)
-        Label("APLIKASI TERDETEKSI")
-        if (ui.status != ShizukuStatus.READY) {
-            Txt("Hubungkan Shizuku untuk melihat daftar.", 14, color = k.muted)
-        } else if (ui.bloat.isEmpty()) {
-            Txt("Tidak ada aplikasi dari daftar ini yang terpasang di HP kamu.", 14, color = k.muted)
-        } else {
-            ui.bloat.forEach { row -> SwitchRow(row.label, row.pkg, row.on) { vm.toggleBloat(row.pkg) } }
-        }
-        Spacer(Modifier.height(8.dp))
-        Txt(
-            "Menonaktifkan aplikasi sistem bisa memengaruhi fitur tertentu. Tombol Kembalikan di beranda mengaktifkan semuanya lagi.",
-            12, color = k.muted,
-        )
-    }
-}
-
-@Composable
-private fun GamesScreen(ui: Ui, vm: MainViewModel, back: () -> Unit, openTools: () -> Unit) {
-    val k = LocalK.current
-    ScreenFrame("Game", back) {
-        KCard(Modifier.fillMaxWidth(), onClick = openTools) {
-            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                Box(
-                    Modifier.size(38.dp).clip(RoundedCornerShape(11.dp)).background(k.surface2),
-                    contentAlignment = Alignment.Center,
-                ) { Icon(Icons.Outlined.SportsEsports, null, tint = k.accent, modifier = Modifier.size(22.dp)) }
-                Column(Modifier.weight(1f)) {
-                    Txt("Game Tools", 16, FontWeight.Bold)
-                    Txt("Crosshair, FPS, dan boost game", 13, color = k.muted)
-                }
-                Txt("›", 24, color = k.muted)
-            }
-        }
-        Spacer(Modifier.height(8.dp))
-        if (Build.VERSION.SDK_INT < 31) {
-            Txt("Mode performa game butuh Android 12 atau lebih baru.", 14, color = k.muted)
-        } else {
-            Txt("Aktifkan mode performa untuk game yang kamu pilih.", 14, color = k.muted)
-            Spacer(Modifier.height(4.dp))
-            ui.games.forEach { row -> SwitchRow(row.label, row.pkg, row.on) { vm.toggleGame(row.pkg) } }
-        }
-    }
-}
+private fun PresetRow(title: String, detail: Str
