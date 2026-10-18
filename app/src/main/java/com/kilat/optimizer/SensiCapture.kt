@@ -38,6 +38,10 @@ private const val RAW_BIND_PX = 160f
 /** Gerakan jari mentah (piksel) tanpa kabar dari jendela sebelum jalur mentah mengambil alih. */
 private const val RAW_TAKEOVER_PX = 24f
 
+/** Setelah jendela dibatalkan: batas menunggu jari mentah terikat, dan batas keamanan lama gestur (ms). */
+private const val DEAD_BIND_MS = 400L
+private const val DEAD_MAX_MS = 30_000L
+
 /**
  * Jendela zona sensitivitas. Setiap zona adalah satu jendela transparan seukuran zona yang
  * menangkap sentuhan di areanya, lalu menyuntikkan sentuhan yang sudah dilebarkan ke game.
@@ -156,6 +160,9 @@ class SensiOverlay(
     /** Status pembacaan mentah, untuk mode uji. */
     val rawStatus: String get() = raw.status
 
+    /** true bila pembacaan mentah layar sentuh sedang jalan. */
+    val rawActive: Boolean get() = raw.status == "aktif"
+
     /** Melepas semua jendela zona. Jari suntik yang masih turun diangkat dulu. */
     fun hide() {
         raw.listener = null
@@ -254,6 +261,11 @@ class ZoneView(ctx: Context, private val host: SensiOverlay) : View(ctx) {
 
     private val activate = Runnable { onActivate() }
 
+    // Jendela sudah dibatalkan sistem tapi jari masih di layar; gerakan diikuti dari jalur mentah.
+    private var winDead = false
+    private val deadCheck = Runnable { if (winDead && state != S.IDLE && rawId < 0) finish(true) }
+    private val deadCap = Runnable { if (winDead && state != S.IDLE) finish(true) }
+
     // Jalur cadangan: posisi jari asli dari pembacaan mentah layar sentuh. Dipakai bila sistem
     // berhenti mengirim gerakan jari asli ke jendela ini setelah sentuhan suntikan masuk.
     private var rawId = -1
@@ -287,7 +299,20 @@ class ZoneView(ctx: Context, private val host: SensiOverlay) : View(ctx) {
             }
             MotionEvent.ACTION_POINTER_UP -> if (state != S.IDLE && e.getPointerId(e.actionIndex) == trackedId) finish(false)
             MotionEvent.ACTION_UP -> if (state != S.IDLE) finish(false)
-            MotionEvent.ACTION_CANCEL -> if (state != S.IDLE) finish(true)
+            MotionEvent.ACTION_CANCEL -> if (state != S.IDLE) {
+                // Sistem yang hanya punya satu keadaan sentuh membatalkan gestur asli begitu sentuhan
+                // suntikan masuk. Jari di layar belum tentu terangkat: kalau pembacaan mentah jalan,
+                // lanjutkan dari sana dan akhiri gestur saat jari mentah terangkat.
+                if (state == S.ACTIVE && !winDead && host.rawActive) {
+                    winDead = true
+                    useRaw = true
+                    rawId = -1
+                    rawSeen = 0
+                    removeCallbacks(deadCheck)
+                    postDelayed(deadCheck, DEAD_BIND_MS)
+                    postDelayed(deadCap, DEAD_MAX_MS)
+                } else if (!winDead) finish(true)
+            }
         }
         return true
     }
@@ -317,6 +342,7 @@ class ZoneView(ctx: Context, private val host: SensiOverlay) : View(ctx) {
         rawId = -1
         rawSeen = 0
         useRaw = false
+        winDead = false
         state = S.WAIT
         // Singkirkan jendela ini dari bawah jari supaya sentuhan suntikan langsung jatuh ke game.
         host.setAway(this, true)
@@ -350,8 +376,8 @@ class ZoneView(ctx: Context, private val host: SensiOverlay) : View(ctx) {
             var best: RawPt? = null
             var bestD = RAW_BIND_PX * RAW_BIND_PX
             for (p in pts) {
-                val dx = p.x - downX
-                val dy = p.y - downY
+                val dx = p.x - (if (winDead) curX else downX)
+                val dy = p.y - (if (winDead) curY else downY)
                 val d = dx * dx + dy * dy
                 if (d <= bestD) {
                     bestD = d
@@ -362,6 +388,11 @@ class ZoneView(ctx: Context, private val host: SensiOverlay) : View(ctx) {
             rawId = b.id
             rawBindX = b.x
             rawBindY = b.y
+            if (winDead) {
+                prevX = b.x
+                prevY = b.y
+                return
+            }
         }
         val me = pts.firstOrNull { it.id == rawId }
         if (me == null) {
@@ -443,6 +474,9 @@ class ZoneView(ctx: Context, private val host: SensiOverlay) : View(ctx) {
         trackedId = -1
         removeCallbacks(activate)
         removeCallbacks(snap)
+        removeCallbacks(deadCheck)
+        removeCallbacks(deadCap)
+        winDead = false
         rawId = -1
         useRaw = false
         host.setAway(this, false)
