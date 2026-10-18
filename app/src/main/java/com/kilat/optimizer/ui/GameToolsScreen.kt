@@ -117,7 +117,8 @@ fun GameToolsScreen(ui: Ui, back: () -> Unit) {
         SwitchRow("Game Tools", "Crosshair dan FPS di atas game", running) { toggle() }
 
         // Izin overlay
-        Row(Modifier.fillMaxWidth().padding(vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+        Rule()
+        Row(Modifier.fillMaxWidth().padding(vertical = 12.dp), verticalAlignment = Alignment.CenterVertically) {
             Column(Modifier.weight(1f)) {
                 Txt("Izin overlay", 15, FontWeight.SemiBold)
                 Txt(
@@ -129,7 +130,8 @@ fun GameToolsScreen(ui: Ui, back: () -> Unit) {
         }
 
         // Shizuku
-        Column(Modifier.fillMaxWidth().padding(vertical = 8.dp)) {
+        Rule()
+        Column(Modifier.fillMaxWidth().padding(vertical = 12.dp)) {
             Txt("Shizuku", 15, FontWeight.SemiBold)
             val (text, color) = when (ui.status) {
                 ShizukuStatus.READY -> "Siap" to k.good
@@ -141,7 +143,8 @@ fun GameToolsScreen(ui: Ui, back: () -> Unit) {
         }
 
         // Mode target
-        Label("MODE TARGET")
+        Rule()
+        Label("Mode target")
         Segmented(listOf("Game pilihan", "Semua aplikasi"), if (st.targetAny) 1 else 0) {
             GameToolsPrefs.setTargetAny(ctx, it == 1)
             st = GameToolsPrefs.read(ctx)
@@ -153,9 +156,9 @@ fun GameToolsScreen(ui: Ui, back: () -> Unit) {
         )
 
         // Daftar game
-        Spacer(Modifier.height(6.dp))
+        Spacer(Modifier.height(14.dp))
         Row(verticalAlignment = Alignment.CenterVertically) {
-            Column(Modifier.weight(1f)) { Txt("Game pilihan", 18, FontWeight.Bold) }
+            Column(Modifier.weight(1f)) { Txt("Game pilihan", 18, FontWeight.Medium, display = true) }
             PillButton("Tambah game", icon = true) { picking = true }
         }
         if (st.games.isEmpty()) {
@@ -169,6 +172,7 @@ fun GameToolsScreen(ui: Ui, back: () -> Unit) {
                 }.sortedBy { it.second.lowercase() }
             }
             rows.forEach { (pkg, label) ->
+                Rule()
                 GameRow(pkg, label, onRemove = {
                     GameToolsPrefs.removeGame(ctx, pkg)
                     st = GameToolsPrefs.read(ctx)
@@ -193,7 +197,8 @@ fun GameToolsScreen(ui: Ui, back: () -> Unit) {
         AlertDialog(
             onDismissRequest = { picking = false },
             containerColor = k.surface,
-            title = { Txt("Tambah game", 18, FontWeight.Bold) },
+            shape = RoundedCornerShape(12.dp),
+            title = { Txt("Tambah game", 20, FontWeight.Medium, display = true) },
             text = {
                 Column(Modifier.heightIn(max = 380.dp).verticalScroll(rememberScrollState())) {
                     if (ui.games.isEmpty()) Txt("Tidak ada aplikasi ditemukan.", 14, color = k.muted)
@@ -223,7 +228,7 @@ fun GameToolsScreen(ui: Ui, back: () -> Unit) {
             },
             confirmButton = {
                 TextButton(onClick = { picking = false }) {
-                    Text("Selesai", color = k.accent, fontWeight = FontWeight.Bold)
+                    Text("Selesai", color = k.link, fontWeight = FontWeight.Bold)
                 }
             },
         )
@@ -232,37 +237,22 @@ fun GameToolsScreen(ui: Ui, back: () -> Unit) {
 
 @Composable
 private fun PillButton(text: String, icon: Boolean = false, onClick: () -> Unit) {
-    val k = LocalK.current
-    val shape = RoundedCornerShape(14.dp)
-    Row(
-        Modifier.clip(shape).background(k.surface2).border(1.dp, k.line, shape)
-            .clickable(onClick = onClick).padding(horizontal = 14.dp, vertical = 10.dp),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(6.dp),
-    ) {
-        if (icon) Icon(Icons.Outlined.Add, null, tint = k.fg, modifier = Modifier.size(18.dp))
-        Txt(text, 14, FontWeight.SemiBold)
-    }
+    KButton(text, onClick, primary = false, compact = true)
 }
 
 @Composable
 private fun Segmented(options: List<String>, selected: Int, onSelect: (Int) -> Unit) {
     val k = LocalK.current
-    Row(
-        Modifier.fillMaxWidth().clip(RoundedCornerShape(14.dp)).background(k.surface2).padding(4.dp),
-        horizontalArrangement = Arrangement.spacedBy(4.dp),
-    ) {
+    val outer = RoundedCornerShape(8.dp)
+    Row(Modifier.fillMaxWidth().clip(outer).border(1.dp, k.line, outer)) {
         options.forEachIndexed { i, text ->
             val sel = i == selected
-            val shape = RoundedCornerShape(11.dp)
             Box(
-                Modifier.weight(1f).clip(shape)
-                    .background(if (sel) k.surface else Color.Transparent)
-                    .border(1.dp, if (sel) k.accent else Color.Transparent, shape)
-                    .clickable { onSelect(i) }.padding(vertical = 12.dp),
+                Modifier.weight(1f).background(if (sel) k.accent else Color.Transparent)
+                    .clickable { onSelect(i) }.padding(vertical = 13.dp),
                 contentAlignment = Alignment.Center,
             ) {
-                Txt(text, 14, if (sel) FontWeight.Bold else FontWeight.Medium, if (sel) k.fg else k.muted)
+                Txt(text, 17, FontWeight.Bold, if (sel) k.accentInk else k.muted, display = true)
             }
         }
     }
@@ -312,7 +302,7 @@ private fun GameRow(pkg: String, label: String, onRemove: () -> Unit) {
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(12.dp),
     ) {
-        val iconShape = RoundedCornerShape(12.dp)
+        val iconShape = RoundedCornerShape(8.dp)
         if (icon != null) {
             Image(bitmap = icon, contentDescription = null, modifier = Modifier.size(44.dp).clip(iconShape))
         } else {
