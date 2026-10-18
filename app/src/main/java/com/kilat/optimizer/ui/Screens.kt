@@ -503,4 +503,59 @@ private fun DisplayEditor(ui: Ui, vm: MainViewModel) {
 }
 
 @Composable
-private fun PresetRow(title: String, detail: Str
+private fun PresetRow(title: String, detail: String, onLoad: () -> Unit, onDelete: (() -> Unit)?) {
+    val k = LocalK.current
+    Row(
+        Modifier.fillMaxWidth().padding(vertical = 6.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Column(Modifier.weight(1f)) {
+            Txt(title, 15, FontWeight.Medium)
+            Txt(detail, 13, color = k.muted)
+        }
+        TextButton(onClick = onLoad) { Text("Muat", color = k.link, fontWeight = FontWeight.Bold) }
+        if (onDelete != null) {
+            TextButton(onClick = onDelete) { Text("Hapus", color = k.muted) }
+        }
+    }
+}
+
+@Composable
+private fun BloatScreen(ui: Ui, vm: MainViewModel, back: () -> Unit) {
+    val k = LocalK.current
+    ScreenFrame("Aplikasi bawaan", back) {
+        KButton("Tutup proses latar belakang", vm::killBackground, Modifier.fillMaxWidth(), primary = false)
+        Spacer(Modifier.height(8.dp))
+        KButton("Bersihkan cache semua aplikasi", vm::trimCaches, Modifier.fillMaxWidth(), primary = false)
+        Label("Aplikasi terdeteksi")
+        if (ui.status != ShizukuStatus.READY) {
+            Txt("Hubungkan Shizuku untuk melihat daftar.", 14, color = k.muted)
+        } else if (ui.bloat.isEmpty()) {
+            Txt("Tidak ada aplikasi dari daftar ini yang terpasang di HP kamu.", 14, color = k.muted)
+        } else {
+            ui.bloat.forEach { row -> SwitchRow(row.label, row.pkg, row.on) { vm.toggleBloat(row.pkg) } }
+        }
+        Spacer(Modifier.height(8.dp))
+        Txt(
+            "Menonaktifkan aplikasi sistem bisa memengaruhi fitur tertentu. Tombol Kembalikan di beranda mengaktifkan semuanya lagi.",
+            12, color = k.muted,
+        )
+    }
+}
+
+@Composable
+private fun GamesScreen(ui: Ui, vm: MainViewModel, back: () -> Unit, openTools: () -> Unit) {
+    val k = LocalK.current
+    ScreenFrame("Game", back) {
+        NavRow("Game Tools", "Crosshair, FPS, dan boost game", Icons.Outlined.SportsEsports, openTools)
+        Rule()
+        Spacer(Modifier.height(8.dp))
+        if (Build.VERSION.SDK_INT < 31) {
+            Txt("Mode performa game butuh Android 12 atau lebih baru.", 14, color = k.muted)
+        } else {
+            Txt("Aktifkan mode performa untuk game yang kamu pilih.", 14, color = k.muted)
+            Spacer(Modifier.height(4.dp))
+            ui.games.forEach { row -> SwitchRow(row.label, row.pkg, row.on) { vm.toggleGame(row.pkg) } }
+        }
+    }
+}
