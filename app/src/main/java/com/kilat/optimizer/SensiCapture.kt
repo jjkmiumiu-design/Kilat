@@ -16,6 +16,11 @@ import kotlin.math.roundToInt
 /** ID jari untuk sentuhan yang disuntikkan. Dipilih besar supaya tidak bentrok dengan jari asli (0, 1, 2, ...). */
 private const val INJECT_ID = 20
 
+/** ID jari untuk ketukan aksi tap, berbeda dari jari geser zona. */
+private const val TAP_ID = 21
+private const val TAP_HOLD_MS = 45L
+private const val DOUBLE_GAP_MS = 110L
+
 /**
  * Id perangkat untuk sentuhan suntikan. Android 15+ melacak sentuhan per perangkat, jadi jari suntik
  * dibuat sebagai perangkat sendiri (0, seperti scrcpy) supaya tidak bentrok dengan jari asli yang
@@ -91,7 +96,7 @@ class SensiOverlay(
         }
         val (w, h) = screenSize()
         val sig = "${w}x$h|" + data.zones.joinToString(";") {
-            "${it.id},${it.cx},${it.cy},${it.sizeDp},${data.xOf(it)},${data.yOf(it)}"
+            "${it.id},${it.cx},${it.cy},${it.sizeDp},${data.xOf(it)},${data.yOf(it)},${it.tap},${it.tx},${it.ty},${it.repeatMs}"
         }
         if (sig == signature && entries.isNotEmpty()) {
             maybeRestartRaw()
@@ -132,6 +137,10 @@ class SensiOverlay(
             val view = ZoneView(ctx, this)
             view.sx = data.xOf(z)
             view.sy = data.yOf(z)
+            view.tapMode = z.tap
+            view.tapX = z.tx * w
+            view.tapY = z.ty * h
+            view.tapRepeatMs = z.repeatMs.toLong()
             try {
                 wm.addView(view, lp)
                 entries += Entry(view, lp, lp.x, lp.y)
@@ -214,6 +223,18 @@ class SensiOverlay(
         return ok
     }
 
+    /**
+     * Satu ketukan singkat di (x, y) sebagai jari terpisah (id [TAP_ID], perangkat 0), tanpa mengganggu
+     * jari zona yang sedang turun. Dilepas otomatis setelah [TAP_HOLD_MS].
+     */
+    fun tap(x: Float, y: Float) {
+        val t = SystemClock.uptimeMillis()
+        if (!Shell.inject(MotionEvent.ACTION_DOWN, TAP_ID, x, y, t, t, 0)) return
+        main.postDelayed({
+            Shell.inject(MotionEvent.ACTION_UP, TAP_ID, x, y, t, SystemClock.uptimeMillis(), 0)
+        }, TAP_HOLD_MS)
+    }
+
     fun strike() {
         strikes++
         if (strikes >= MAX_STRIKES) {
@@ -235,6 +256,34 @@ class ZoneView(ctx: Context, private val host: SensiOverlay) : View(ctx) {
 
     var sx = 1f
     var sy = 1f
+
+    // Aksi tap (lihat SensiPrefs.TAP_*). Koordinat dalam piksel layar.
+    var tapMode = 0
+    var tapX = 0f
+    var tapY = 0f
+    var tapRepeatMs = 100L
+
+    private val repeatRun = object : Runnable {
+        override fun run() {
+            if (state != S.ACTIVE) return
+            host.tap(tapX, tapY)
+            postDelayed(this, tapRepeatMs)
+        }
+    }
+
+    private fun startTap() {
+        when (tapMode) {
+            SensiPrefs.TAP_ONCE -> host.tap(tapX, tapY)
+            SensiPrefs.TAP_DOUBLE -> {
+                host.tap(tapX, tapY)
+                postDelayed({ host.tap(tapX, tapY) }, DOUBLE_GAP_MS)
+            }
+            SensiPrefs.TAP_REPEAT -> {
+                host.tap(tapX, tapY)
+                postDelayed(repeatRun, tapRepeatMs)
+            }
+        }
+    }
 
     private enum class S { IDLE, WAIT, ACTIVE }
 
@@ -357,6 +406,7 @@ class ZoneView(ctx: Context, private val host: SensiOverlay) : View(ctx) {
             return
         }
         state = S.ACTIVE
+        startTap()
         if (host.debugOn) postDelayed(snap, 1000)
         // Gerakan yang sudah terjadi selama menunggu.
         if (curX != downX || curY != downY) {
@@ -461,6 +511,8 @@ class ZoneView(ctx: Context, private val host: SensiOverlay) : View(ctx) {
             host.resetStrikes()
         }
         host.inject(MotionEvent.ACTION_UP, ipX, ipY, injDownTime, deviceId)
+        removeCallbacks(repeatRun)
+        if (tapMode == SensiPrefs.TAP_RELEASE) host.tap(tapX, tapY)
         host.debug(
             "A${Build.VERSION.SDK_INT} dev ${deviceId}>${injectDeviceId(deviceId)} | " +
                 (if (cancel) "AKHIR=CANCEL" else "AKHIR=UP") +
@@ -474,6 +526,7 @@ class ZoneView(ctx: Context, private val host: SensiOverlay) : View(ctx) {
         trackedId = -1
         removeCallbacks(activate)
         removeCallbacks(snap)
+        removeCallbacks(repeatRun)
         removeCallbacks(deadCheck)
         removeCallbacks(deadCap)
         winDead = false
@@ -486,6 +539,7 @@ class ZoneView(ctx: Context, private val host: SensiOverlay) : View(ctx) {
     fun release() {
         removeCallbacks(activate)
         removeCallbacks(snap)
+        removeCallbacks(repeatRun)
         if (state == S.ACTIVE) {
             Shell.inject(MotionEvent.ACTION_UP, INJECT_ID, ipX, ipY, injDownTime, SystemClock.uptimeMillis(), injectDeviceId(deviceId))
         }

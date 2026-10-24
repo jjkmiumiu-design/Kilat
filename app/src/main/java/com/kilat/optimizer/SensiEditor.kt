@@ -46,8 +46,14 @@ class SensiEditor(
 
     private val canvas = EditorCanvas(ctx)
     private val card = LinearLayout(ctx)
+    private val cardScroll = MaxHeightScrollView(ctx)
     private val cardName = TextView(ctx)
     private val sizeBar = SeekBar(ctx)
+    private val tapChips = ArrayList<TextView>()
+    private val repeatBar = SeekBar(ctx)
+    private val repeatLabel = TextView(ctx)
+    private val repeatRow = LinearLayout(ctx)
+    private val tapHint = TextView(ctx)
     private val dialogLayer = FrameLayout(ctx)
 
     // Pengaturan zona (dialog), disalin dulu supaya BATAL tidak mengubah apa pun.
@@ -75,7 +81,10 @@ class SensiEditor(
             Gravity.TOP or Gravity.CENTER_HORIZONTAL,
         ).apply { topMargin = dp(12) })
         buildCard()
-        root.addView(card, FrameLayout.LayoutParams(
+        cardScroll.maxHeightPx = screenH - dp(80)
+        cardScroll.isVerticalScrollBarEnabled = false
+        cardScroll.addView(card, ViewGroup.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT))
+        root.addView(cardScroll, FrameLayout.LayoutParams(
             min(dp(300), (screenW * 0.7f).toInt()), ViewGroup.LayoutParams.WRAP_CONTENT,
             Gravity.TOP or Gravity.CENTER_HORIZONTAL,
         ).apply { topMargin = dp(68) })
@@ -174,6 +183,66 @@ class SensiEditor(
         card.addView(row2, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply {
             topMargin = dp(4)
         })
+
+        // Aksi tap: apa yang diketuk otomatis di titik T saat jari menyentuh zona.
+        card.addView(label("Aksi tap", 12f, MUTED), LinearLayout.LayoutParams(
+            ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply { topMargin = dp(10) })
+        val chips = LinearLayout(ctx).apply { orientation = LinearLayout.HORIZONTAL }
+        SensiPrefs.TAP_NAMES.forEachIndexed { i, name ->
+            val c = TextView(ctx).apply {
+                text = name
+                textSize = 12f
+                gravity = Gravity.CENTER
+                setOnClickListener { setTapMode(i) }
+            }
+            tapChips += c
+            chips.addView(c, LinearLayout.LayoutParams(0, dp(34), 1f).apply { if (i > 0) leftMargin = dp(4) })
+        }
+        card.addView(chips, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply {
+            topMargin = dp(4)
+        })
+
+        repeatRow.orientation = LinearLayout.VERTICAL
+        repeatLabel.textSize = 12f
+        repeatLabel.setTextColor(MUTED)
+        repeatRow.addView(repeatLabel)
+        repeatBar.max = (SensiPrefs.REPEAT_MAX - SensiPrefs.REPEAT_MIN) / SensiPrefs.REPEAT_STEP
+        repeatBar.progressTintList = ColorStateList.valueOf(ACCENT)
+        repeatBar.thumbTintList = ColorStateList.valueOf(ACCENT)
+        repeatBar.progressBackgroundTintList = ColorStateList.valueOf(LINE)
+        repeatBar.setOnSeekBarChangeListener(object : SeekBar.OnSeekBarChangeListener {
+            override fun onProgressChanged(seekBar: SeekBar, progress: Int, fromUser: Boolean) {
+                if (fromUser) setRepeat(SensiPrefs.REPEAT_MIN + progress * SensiPrefs.REPEAT_STEP)
+            }
+
+            override fun onStartTrackingTouch(seekBar: SeekBar) {}
+            override fun onStopTrackingTouch(seekBar: SeekBar) {}
+        })
+        repeatRow.addView(repeatBar)
+        card.addView(repeatRow, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply {
+            topMargin = dp(6)
+        })
+
+        tapHint.textSize = 11f
+        tapHint.setTextColor(ACCENT)
+        card.addView(tapHint, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply {
+            topMargin = dp(6)
+        })
+    }
+
+    private fun setTapMode(mode: Int) {
+        val i = selectedIndex()
+        if (i < 0) return
+        zones[i] = zones[i].copy(tap = mode)
+        refreshCard()
+    }
+
+    private fun setRepeat(ms: Int) {
+        val i = selectedIndex()
+        if (i < 0) return
+        zones[i] = zones[i].copy(repeatMs = ms.coerceIn(SensiPrefs.REPEAT_MIN, SensiPrefs.REPEAT_MAX))
+        repeatLabel.text = "Jarak ketukan: ${zones[i].repeatMs} ms"
+        canvas.invalidate()
     }
 
     private fun buildDialog() {
@@ -239,11 +308,27 @@ class SensiEditor(
     private fun refreshCard() {
         val i = selectedIndex()
         if (i < 0) {
-            card.visibility = View.GONE
+            cardScroll.visibility = View.GONE
         } else {
-            card.visibility = View.VISIBLE
+            cardScroll.visibility = View.VISIBLE
             cardName.text = nameOf(zones[i])
             sizeBar.progress = (zones[i].sizeDp - SensiPrefs.SIZE_MIN) / SensiPrefs.SIZE_STEP
+            val mode = zones[i].tap
+            tapChips.forEachIndexed { k, c ->
+                val sel = k == mode
+                c.background = box(10, if (sel) Color.argb(0x33, 242, 190, 12) else CHIP_BG, if (sel) ACCENT else LINE, 1)
+                c.setTextColor(if (sel) TEXT else MUTED)
+            }
+            repeatRow.visibility = if (mode == SensiPrefs.TAP_REPEAT) View.VISIBLE else View.GONE
+            repeatBar.progress = (zones[i].repeatMs - SensiPrefs.REPEAT_MIN) / SensiPrefs.REPEAT_STEP
+            repeatLabel.text = "Jarak ketukan: ${zones[i].repeatMs} ms"
+            tapHint.visibility = if (mode == SensiPrefs.TAP_OFF) View.GONE else View.VISIBLE
+            tapHint.text = when (mode) {
+                SensiPrefs.TAP_ONCE -> "Jari menyentuh zona: titik T diketuk sekali. Seret T untuk memindahkan."
+                SensiPrefs.TAP_REPEAT -> "Selama jari ditahan di zona, titik T diketuk berulang. Seret T untuk memindahkan."
+                SensiPrefs.TAP_DOUBLE -> "Jari menyentuh zona: titik T diketuk dua kali. Seret T untuk memindahkan."
+                else -> "Jari diangkat dari zona: titik T diketuk sekali. Seret T untuk memindahkan."
+            }
         }
         canvas.invalidate()
     }
@@ -343,6 +428,7 @@ class SensiEditor(
             typeface = Typeface.DEFAULT_BOLD
         }
         private var dragId = -1
+        private var dragTarget = false
         private var offX = 0f
         private var offY = 0f
 
@@ -364,6 +450,19 @@ class SensiEditor(
         override fun onTouchEvent(e: MotionEvent): Boolean {
             when (e.actionMasked) {
                 MotionEvent.ACTION_DOWN -> {
+                    dragTarget = false
+                    val sz = zones.firstOrNull { it.id == selected && it.tap != SensiPrefs.TAP_OFF }
+                    if (sz != null) {
+                        val dx = e.x - sz.tx * width
+                        val dy = e.y - sz.ty * height
+                        if (dx * dx + dy * dy <= dp(28) * dp(28)) {
+                            dragTarget = true
+                            dragId = -1
+                            offX = dx
+                            offY = dy
+                            return true
+                        }
+                    }
                     val z = hit(e.x, e.y)
                     if (z != null) {
                         dragId = z.id
@@ -375,7 +474,16 @@ class SensiEditor(
                         select(-1)
                     }
                 }
-                MotionEvent.ACTION_MOVE -> if (dragId >= 0) {
+                MotionEvent.ACTION_MOVE -> if (dragTarget) {
+                    val i = selectedIndex()
+                    if (i >= 0) {
+                        zones[i] = zones[i].copy(
+                            tx = ((e.x - offX) / width).coerceIn(0.02f, 0.98f),
+                            ty = ((e.y - offY) / height).coerceIn(0.02f, 0.98f),
+                        )
+                        invalidate()
+                    }
+                } else if (dragId >= 0) {
                     val i = zones.indexOfFirst { it.id == dragId }
                     if (i >= 0) {
                         zones[i] = zones[i].copy(
@@ -385,7 +493,10 @@ class SensiEditor(
                         invalidate()
                     }
                 }
-                MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> dragId = -1
+                MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {
+                    dragId = -1
+                    dragTarget = false
+                }
             }
             return true
         }
@@ -394,6 +505,28 @@ class SensiEditor(
             color = Color.argb(0x55, 255, 255, 255)
             textAlign = Paint.Align.CENTER
             typeface = Typeface.DEFAULT_BOLD
+        }
+
+        /** Titik T: tempat ketukan aksi tap, dengan garis putus-putus dari zona asalnya. */
+        private fun drawTarget(c: Canvas, z: SensiZone, cx: Float, cy: Float, sel: Boolean) {
+            val tx = z.tx * width
+            val ty = z.ty * height
+            val a = if (sel) 0xFF else 0x77
+            line.color = Color.argb(a / 2, 255, 255, 255)
+            line.strokeWidth = dp(1).toFloat()
+            line.pathEffect = android.graphics.DashPathEffect(floatArrayOf(dp(6).toFloat(), dp(6).toFloat()), 0f)
+            c.drawLine(cx, cy, tx, ty, line)
+            line.pathEffect = null
+            val r = dp(15).toFloat()
+            fill.color = Color.argb(if (sel) 0xCC else 0x66, 0x12, 0x13, 0x15)
+            c.drawCircle(tx, ty, r, fill)
+            line.color = Color.argb(a, 0x6F, 0xBF, 0x86)
+            line.strokeWidth = dp(2).toFloat()
+            c.drawCircle(tx, ty, r, line)
+            text.textSize = dp(12).toFloat()
+            c.drawText("T", tx, ty + dp(4), text)
+            text.textSize = dp(10).toFloat()
+            c.drawText(SensiPrefs.TAP_NAMES[z.tap], tx, ty + r + dp(13), text)
         }
 
         override fun onDraw(c: Canvas) {
@@ -434,6 +567,8 @@ class SensiEditor(
 
                 text.textSize = dp(12).toFloat()
                 c.drawText(nameOf(z), cx, cy + s + dp(18), text)
+
+                if (z.tap != SensiPrefs.TAP_OFF) drawTarget(c, z, cx, cy, sel)
             }
         }
     }

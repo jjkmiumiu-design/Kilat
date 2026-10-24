@@ -18,6 +18,13 @@ data class SensiZone(
     val useGlobal: Boolean,
     val sx: Float,
     val sy: Float,
+    /** Aksi tap saat jari menyentuh zona: [SensiPrefs.TAP_OFF] dan seterusnya. */
+    val tap: Int = 0,
+    /** Titik yang diketuk, pecahan lebar dan tinggi layar. */
+    val tx: Float = 0.82f,
+    val ty: Float = 0.5f,
+    /** Jarak antar ketukan untuk mode berulang (ms). */
+    val repeatMs: Int = 100,
 )
 
 data class SensiData(val zones: List<SensiZone>, val gx: Float, val gy: Float) {
@@ -37,6 +44,17 @@ object SensiPrefs {
     const val SIZE_DEFAULT = 140
     const val MAX_ZONES = 6
     const val DEFAULT_VALUE = 1.2f
+
+    /** Aksi tap: 0 mati, 1 sekali saat jari turun, 2 berulang selama jari ditahan, 3 dua kali, 4 saat jari diangkat. */
+    const val TAP_OFF = 0
+    const val TAP_ONCE = 1
+    const val TAP_REPEAT = 2
+    const val TAP_DOUBLE = 3
+    const val TAP_RELEASE = 4
+    val TAP_NAMES = arrayOf("Mati", "Tap", "Ulang", "Dobel", "Lepas")
+    const val REPEAT_MIN = 40
+    const val REPEAT_MAX = 1000
+    const val REPEAT_STEP = 10
 
     /** Membulatkan ke kelipatan [STEP] dan membatasi ke [MIN]..[MAX]. */
     fun snap(v: Float): Float {
@@ -59,6 +77,10 @@ object SensiPrefs {
                     useGlobal = o.optBoolean("g", false),
                     sx = snap(o.optDouble("sx", DEFAULT_VALUE.toDouble()).toFloat()),
                     sy = snap(o.optDouble("sy", DEFAULT_VALUE.toDouble()).toFloat()),
+                    tap = o.optInt("tap", 0).coerceIn(0, TAP_NAMES.size - 1),
+                    tx = o.optDouble("tx", 0.82).toFloat().coerceIn(0f, 1f),
+                    ty = o.optDouble("ty", 0.5).toFloat().coerceIn(0f, 1f),
+                    repeatMs = o.optInt("rep", 100).coerceIn(REPEAT_MIN, REPEAT_MAX),
                 )
             }
         } catch (e: Exception) {
@@ -83,6 +105,10 @@ object SensiPrefs {
                     .put("g", z.useGlobal)
                     .put("sx", z.sx.toDouble())
                     .put("sy", z.sy.toDouble())
+                    .put("tap", z.tap)
+                    .put("tx", z.tx.toDouble())
+                    .put("ty", z.ty.toDouble())
+                    .put("rep", z.repeatMs)
             )
         }
         GameToolsPrefs.prefs(ctx).edit()

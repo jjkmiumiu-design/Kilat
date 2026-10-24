@@ -354,7 +354,10 @@ class GamePanel(
         sensiBox.addView(
             TextView(ctx).apply {
                 text = "Gerakan jari yang dimulai di dalam zona dilebarkan sesuai nilai X dan Y, jadi kamera game bergerak lebih jauh. " +
-                    "Sentuhan di luar zona tidak diubah."
+                    "Sentuhan di luar zona tidak diubah.\n\n" +
+                    "Aksi tap: pilih zona di Edit zona, lalu atur Aksi tap. Tap = ketuk titik T sekali saat jari menyentuh zona, " +
+                    "Ulang = ketuk berulang selama jari ditahan, Dobel = ketuk dua kali, Lepas = ketuk saat jari diangkat. " +
+                    "Seret titik T ke tempat yang mau diketuk."
                 setTextColor(MUTED)
                 textSize = 12f
             },
@@ -390,7 +393,8 @@ class GamePanel(
             val sd = SensiPrefs.read(ctx)
             globalX.set(sd.gx)
             globalY.set(sd.gy)
-            sensiCount.text = "${sd.zones.size} zona"
+            val tapN = sd.zones.count { it.tap != SensiPrefs.TAP_OFF }
+            sensiCount.text = "${sd.zones.size} zona" + if (tapN > 0) " · $tapN dengan aksi tap" else ""
             val (ready, msg) = Shell.injectMessage()
             sensiStatus.text = msg
             sensiStatus.setTextColor(when (ready) { true -> GOOD; false -> BAD; null -> MUTED })
