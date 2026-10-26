@@ -18,8 +18,7 @@ private const val INJECT_ID = 20
 
 /** ID jari untuk ketukan aksi tap, berbeda dari jari geser zona. */
 private const val TAP_ID = 21
-private const val TAP_HOLD_MS = 45L
-private const val DOUBLE_GAP_MS = 110L
+private const val DOUBLE_GAP_MS = 60L
 
 /**
  * Id perangkat untuk sentuhan suntikan. Android 15+ melacak sentuhan per perangkat, jadi jari suntik
@@ -96,7 +95,7 @@ class SensiOverlay(
         }
         val (w, h) = screenSize()
         val sig = "${w}x$h|" + data.zones.joinToString(";") {
-            "${it.id},${it.cx},${it.cy},${it.sizeDp},${data.xOf(it)},${data.yOf(it)},${it.tap},${it.tx},${it.ty},${it.repeatMs}"
+            "${it.id},${it.cx},${it.cy},${it.sizeDp},${data.xOf(it)},${data.yOf(it)},${it.tap},${it.tx},${it.ty},${it.repeatMs},${it.holdMs}"
         }
         if (sig == signature && entries.isNotEmpty()) {
             maybeRestartRaw()
@@ -141,6 +140,7 @@ class SensiOverlay(
             view.tapX = z.tx * w
             view.tapY = z.ty * h
             view.tapRepeatMs = z.repeatMs.toLong()
+            view.tapHoldMs = z.holdMs.toLong()
             try {
                 wm.addView(view, lp)
                 entries += Entry(view, lp, lp.x, lp.y)
@@ -225,14 +225,15 @@ class SensiOverlay(
 
     /**
      * Satu ketukan singkat di (x, y) sebagai jari terpisah (id [TAP_ID], perangkat 0), tanpa mengganggu
-     * jari zona yang sedang turun. Dilepas otomatis setelah [TAP_HOLD_MS].
+     * jari zona yang sedang turun. Dilepas otomatis setelah [holdMs] milidetik.
      */
-    fun tap(x: Float, y: Float) {
+    fun tap(x: Float, y: Float, deviceId: Int, holdMs: Long) {
+        val dev = injectDeviceId(deviceId)
         val t = SystemClock.uptimeMillis()
-        if (!Shell.inject(MotionEvent.ACTION_DOWN, TAP_ID, x, y, t, t, 0)) return
+        if (!Shell.inject(MotionEvent.ACTION_DOWN, TAP_ID, x, y, t, t, dev)) return
         main.postDelayed({
-            Shell.inject(MotionEvent.ACTION_UP, TAP_ID, x, y, t, SystemClock.uptimeMillis(), 0)
-        }, TAP_HOLD_MS)
+            Shell.inject(MotionEvent.ACTION_UP, TAP_ID, x, y, t, SystemClock.uptimeMillis(), dev)
+        }, holdMs)
     }
 
     fun strike() {
@@ -262,25 +263,27 @@ class ZoneView(ctx: Context, private val host: SensiOverlay) : View(ctx) {
     var tapX = 0f
     var tapY = 0f
     var tapRepeatMs = 100L
+    var tapHoldMs = 30L
 
     private val repeatRun = object : Runnable {
         override fun run() {
             if (state != S.ACTIVE) return
-            host.tap(tapX, tapY)
-            postDelayed(this, tapRepeatMs)
+            host.tap(tapX, tapY, deviceId, tapHoldMs)
+            // Jarak tidak boleh lebih pendek dari lama tekan, kalau tidak ketukan saling menumpuk.
+            postDelayed(this, maxOf(tapRepeatMs, tapHoldMs + 2))
         }
     }
 
     private fun startTap() {
         when (tapMode) {
-            SensiPrefs.TAP_ONCE -> host.tap(tapX, tapY)
+            SensiPrefs.TAP_ONCE -> host.tap(tapX, tapY, deviceId, tapHoldMs)
             SensiPrefs.TAP_DOUBLE -> {
-                host.tap(tapX, tapY)
-                postDelayed({ host.tap(tapX, tapY) }, DOUBLE_GAP_MS)
+                host.tap(tapX, tapY, deviceId, tapHoldMs)
+                postDelayed({ host.tap(tapX, tapY, deviceId, tapHoldMs) }, tapHoldMs + DOUBLE_GAP_MS)
             }
             SensiPrefs.TAP_REPEAT -> {
-                host.tap(tapX, tapY)
-                postDelayed(repeatRun, tapRepeatMs)
+                host.tap(tapX, tapY, deviceId, tapHoldMs)
+                postDelayed(repeatRun, maxOf(tapRepeatMs, tapHoldMs + 2))
             }
         }
     }
@@ -512,7 +515,7 @@ class ZoneView(ctx: Context, private val host: SensiOverlay) : View(ctx) {
         }
         host.inject(MotionEvent.ACTION_UP, ipX, ipY, injDownTime, deviceId)
         removeCallbacks(repeatRun)
-        if (tapMode == SensiPrefs.TAP_RELEASE) host.tap(tapX, tapY)
+        if (tapMode == SensiPrefs.TAP_RELEASE) host.tap(tapX, tapY, deviceId, tapHoldMs)
         host.debug(
             "A${Build.VERSION.SDK_INT} dev ${deviceId}>${injectDeviceId(deviceId)} | " +
                 (if (cancel) "AKHIR=CANCEL" else "AKHIR=UP") +

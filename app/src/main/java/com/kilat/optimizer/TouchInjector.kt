@@ -131,37 +131,121 @@ class TouchInjector {
         return status
     }
 
+    /** Jari yang sedang turun pada satu perangkat. Urutan = indeks pointer di MotionEvent. */
+    private class Dev {
+        val ids = ArrayList<Int>()
+        val xs = ArrayList<Float>()
+        val ys = ArrayList<Float>()
+        var downTime = 0L
+        var lastAt = 0L
+
+        fun clear() {
+            ids.clear(); xs.clear(); ys.clear()
+        }
+
+        fun indexOf(id: Int) = ids.indexOf(id)
+
+        fun put(id: Int, x: Float, y: Float) {
+            val i = ids.indexOf(id)
+            if (i >= 0) {
+                xs[i] = x; ys[i] = y
+            } else {
+                ids.add(id); xs.add(x); ys.add(y)
+            }
+        }
+
+        fun removeAt(i: Int) {
+            ids.removeAt(i); xs.removeAt(i); ys.removeAt(i)
+        }
+    }
+
+    private val devs = HashMap<Int, Dev>()
+    private val stateLock = Any()
+
+    /**
+     * Mengirim satu perubahan jari. Semua jari yang sedang turun pada perangkat yang sama digabung
+     * dalam satu aliran MotionEvent (DOWN, POINTER_DOWN, MOVE, POINTER_UP, UP), seperti jari asli.
+     * Dengan begitu jari kedua (mis. ketukan aksi tap) tidak menggantikan atau membatalkan jari
+     * pertama (geseran zona sensi), baik di Android yang melacak satu sentuhan per layar maupun per perangkat.
+     */
     fun touch(action: Int, pointerId: Int, x: Float, y: Float, downTime: Long, eventTime: Long, deviceId: Int) {
         val inject = (injector ?: run { resolve(); injector })?.fn ?: return
-        val props = arrayOf(
-            MotionEvent.PointerProperties().apply {
-                id = pointerId
-                toolType = MotionEvent.TOOL_TYPE_FINGER
+        synchronized(stateLock) {
+            val d = devs.getOrPut(deviceId) { Dev() }
+            val now = SystemClock.uptimeMillis()
+            // Sisa keadaan lama (mis. UP tidak pernah datang): buang supaya gestur baru bersih.
+            if (d.ids.isNotEmpty() && now - d.lastAt > 60_000L) d.clear()
+            d.lastAt = now
+
+            val act: Int
+            var removeIndex = -1
+            var clearAll = false
+            when (action) {
+                MotionEvent.ACTION_DOWN -> {
+                    val old = d.indexOf(pointerId)
+                    if (old >= 0) d.removeAt(old)
+                    if (d.ids.isEmpty()) {
+                        d.downTime = downTime
+                        d.put(pointerId, x, y)
+                        act = MotionEvent.ACTION_DOWN
+                    } else {
+                        d.put(pointerId, x, y)
+                        act = MotionEvent.ACTION_POINTER_DOWN or (d.indexOf(pointerId) shl MotionEvent.ACTION_POINTER_INDEX_SHIFT)
+                    }
+                }
+                MotionEvent.ACTION_MOVE -> {
+                    if (d.indexOf(pointerId) < 0) return
+                    d.put(pointerId, x, y)
+                    act = MotionEvent.ACTION_MOVE
+                }
+                MotionEvent.ACTION_UP -> {
+                    val i = d.indexOf(pointerId)
+                    if (i < 0) return
+                    d.put(pointerId, x, y)
+                    removeIndex = i
+                    act = if (d.ids.size == 1) MotionEvent.ACTION_UP
+                    else MotionEvent.ACTION_POINTER_UP or (i shl MotionEvent.ACTION_POINTER_INDEX_SHIFT)
+                }
+                MotionEvent.ACTION_CANCEL -> {
+                    if (d.ids.isEmpty()) return
+                    clearAll = true
+                    act = MotionEvent.ACTION_CANCEL
+                }
+                else -> return
             }
-        )
-        val coords = arrayOf(
-            MotionEvent.PointerCoords().apply {
-                this.x = x
-                this.y = y
-                pressure = 1f
-                size = 1f
+
+            val n = d.ids.size
+            val props = Array(n) { i ->
+                MotionEvent.PointerProperties().apply {
+                    id = d.ids[i]
+                    toolType = MotionEvent.TOOL_TYPE_FINGER
+                }
             }
-        )
-        val ev = MotionEvent.obtain(
-            downTime, eventTime, action, 1, props, coords,
-            0, 0, 1f, 1f, deviceId, 0, InputDevice.SOURCE_TOUCHSCREEN, 0,
-        )
-        try {
+            val coords = Array(n) { i ->
+                MotionEvent.PointerCoords().apply {
+                    this.x = d.xs[i]
+                    this.y = d.ys[i]
+                    pressure = 1f
+                    size = 1f
+                }
+            }
+            val ev = MotionEvent.obtain(
+                d.downTime, eventTime, act, n, props, coords,
+                0, 0, 1f, 1f, deviceId, 0, InputDevice.SOURCE_TOUCHSCREEN, 0,
+            )
             try {
-                setDisplayId?.invoke(ev, 0)
-            } catch (t: Throwable) {
-                // tidak kritis
+                try {
+                    setDisplayId?.invoke(ev, 0)
+                } catch (t: Throwable) {
+                    // tidak kritis
+                }
+                inject(ev)
+            } catch (e: Throwable) {
+                // Satu event gagal tidak boleh mematikan proses.
+            } finally {
+                ev.recycle()
             }
-            inject(ev)
-        } catch (e: Throwable) {
-            // Satu event gagal tidak boleh mematikan proses.
-        } finally {
-            ev.recycle()
+            if (clearAll) d.clear() else if (removeIndex >= 0) d.removeAt(removeIndex)
         }
     }
 }

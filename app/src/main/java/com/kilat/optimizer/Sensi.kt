@@ -25,6 +25,8 @@ data class SensiZone(
     val ty: Float = 0.5f,
     /** Jarak antar ketukan untuk mode berulang (ms). */
     val repeatMs: Int = 100,
+    /** Lama jari menekan pada tiap ketukan (ms). Boleh sangat singkat. */
+    val holdMs: Int = 30,
 )
 
 data class SensiData(val zones: List<SensiZone>, val gx: Float, val gy: Float) {
@@ -52,9 +54,12 @@ object SensiPrefs {
     const val TAP_DOUBLE = 3
     const val TAP_RELEASE = 4
     val TAP_NAMES = arrayOf("Mati", "Tap", "Ulang", "Dobel", "Lepas")
-    const val REPEAT_MIN = 40
+    const val REPEAT_MIN = 10
     const val REPEAT_MAX = 1000
-    const val REPEAT_STEP = 10
+    const val REPEAT_STEP = 5
+    const val HOLD_MIN = 5
+    const val HOLD_MAX = 200
+    const val HOLD_STEP = 5
 
     /** Membulatkan ke kelipatan [STEP] dan membatasi ke [MIN]..[MAX]. */
     fun snap(v: Float): Float {
@@ -81,6 +86,7 @@ object SensiPrefs {
                     tx = o.optDouble("tx", 0.82).toFloat().coerceIn(0f, 1f),
                     ty = o.optDouble("ty", 0.5).toFloat().coerceIn(0f, 1f),
                     repeatMs = o.optInt("rep", 100).coerceIn(REPEAT_MIN, REPEAT_MAX),
+                    holdMs = o.optInt("hold", 30).coerceIn(HOLD_MIN, HOLD_MAX),
                 )
             }
         } catch (e: Exception) {
@@ -109,6 +115,7 @@ object SensiPrefs {
                     .put("tx", z.tx.toDouble())
                     .put("ty", z.ty.toDouble())
                     .put("rep", z.repeatMs)
+                    .put("hold", z.holdMs)
             )
         }
         GameToolsPrefs.prefs(ctx).edit()
