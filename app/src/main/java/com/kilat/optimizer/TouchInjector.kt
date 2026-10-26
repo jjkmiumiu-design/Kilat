@@ -159,6 +159,11 @@ class TouchInjector {
         }
     }
 
+    companion object {
+        /** Perintah khusus: lupakan semua jari yang tercatat pada perangkat ini (tanpa mengirim event). */
+        const val ACTION_RESET = -1
+    }
+
     private val devs = HashMap<Int, Dev>()
     private val stateLock = Any()
 
@@ -172,6 +177,10 @@ class TouchInjector {
         val inject = (injector ?: run { resolve(); injector })?.fn ?: return
         synchronized(stateLock) {
             val d = devs.getOrPut(deviceId) { Dev() }
+            if (action == ACTION_RESET) {
+                d.clear()
+                return
+            }
             val now = SystemClock.uptimeMillis()
             // Sisa keadaan lama (mis. UP tidak pernah datang): buang supaya gestur baru bersih.
             if (d.ids.isNotEmpty() && now - d.lastAt > 60_000L) d.clear()

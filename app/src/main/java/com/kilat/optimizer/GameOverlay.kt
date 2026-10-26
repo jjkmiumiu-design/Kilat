@@ -6,6 +6,8 @@ import android.graphics.PixelFormat
 import android.graphics.Typeface
 import android.graphics.drawable.GradientDrawable
 import android.os.Build
+import android.os.Handler
+import android.os.Looper
 import android.util.DisplayMetrics
 import android.view.ContextThemeWrapper
 import android.view.Gravity
@@ -88,9 +90,48 @@ class GameOverlay(context: Context) {
         Toast.makeText(ctx, "Zona sensi dimatikan: ROM ini tidak meneruskan sentuhan dengan benar", Toast.LENGTH_LONG).show()
     }
 
-    init {
-        sensi.onDebug = { msg -> Toast.makeText(ctx, msg, Toast.LENGTH_SHORT).show() }
+    // Papan uji: tulisan kecil di atas layar (jendela sendiri). Toast tidak dipakai karena banyak ROM
+    // menyembunyikan toast dari layanan latar, jadi pesan uji tidak pernah terlihat.
+    private val uiHandler = Handler(Looper.getMainLooper())
+    private val hudLines = ArrayList<String>()
+    private val hud = TextView(ctx).apply {
+        setTextColor(Color.WHITE)
+        textSize = 11f
+        typeface = Typeface.MONOSPACE
+        setPadding(dp(10), dp(6), dp(10), dp(6))
+        background = GradientDrawable().apply {
+            cornerRadius = dp(10).toFloat()
+            setColor(Color.argb(0xCC, 0, 0, 0))
+        }
     }
+    private val hudHide = Runnable {
+        hudLines.clear()
+        ensure(hud, hudLp, false, relayout = false)
+    }
+
+    private fun hudPost(msg: String) {
+        hudLines += msg
+        while (hudLines.size > 5) hudLines.removeAt(0)
+        hud.text = hudLines.joinToString("\n")
+        ensure(hud, hudLp, true, relayout = false)
+        // Jendela sudah terpasang: ukuran teks baru perlu dihitung ulang.
+        hud.requestLayout()
+        uiHandler.removeCallbacks(hudHide)
+        uiHandler.postDelayed(hudHide, 9000)
+    }
+
+    init {
+        sensi.onDebug = { msg ->
+            hudPost(msg)
+            try {
+                Toast.makeText(ctx, msg, Toast.LENGTH_SHORT).show()
+            } catch (e: Exception) {
+                // dibiarkan
+            }
+        }
+    }
+
+    private var lastStatus = ""
 
     // ---------- parameter jendela ----------
 
@@ -124,6 +165,7 @@ class GameOverlay(context: Context) {
     private val crossLp = params(false, dp(48), dp(48), Gravity.CENTER)
     private val fpsLp = params(false, WindowManager.LayoutParams.WRAP_CONTENT, WindowManager.LayoutParams.WRAP_CONTENT, Gravity.TOP or Gravity.START)
     private val handleLp = params(true, dp(22), dp(56), Gravity.END or Gravity.CENTER_VERTICAL)
+    private val hudLp = params(false, WindowManager.LayoutParams.WRAP_CONTENT, WindowManager.LayoutParams.WRAP_CONTENT, Gravity.TOP or Gravity.CENTER_HORIZONTAL)
     private val panelLp = params(true, dp(300), WindowManager.LayoutParams.WRAP_CONTENT, Gravity.END or Gravity.CENTER_VERTICAL)
 
     private fun screenSize(): Pair<Int, Int> =
@@ -173,8 +215,21 @@ class GameOverlay(context: Context) {
 
     /** Dipanggil tiap putaran service: menyesuaikan zona bila ukuran layar berubah (rotasi). */
     fun refreshSensi() {
-        sensi.debugOn = GameToolsPrefs.prefs(ctx).getBoolean("sensi_debug", false)
+        val dbg = GameToolsPrefs.prefs(ctx).getBoolean("sensi_debug", false)
+        if (dbg != sensi.debugOn) {
+            sensi.debugOn = dbg
+            lastStatus = ""
+            if (active) hudPost(if (dbg) "Mode uji sensi: HIDUP" else "Mode uji sensi: MATI")
+        }
         sensi.apply(sensiWanted(), SensiPrefs.read(ctx))
+        if (dbg && active) {
+            // Satu baris keadaan, hanya ditampilkan saat berubah supaya tidak membanjiri layar.
+            val st = sensi.statusLine() + " | ingin=${sensiWanted()} edit=$editing sensiOn=${settings.sensiOn}"
+            if (st != lastStatus) {
+                lastStatus = st
+                hudPost(st)
+            }
+        }
     }
 
     private fun sensiWanted(): Boolean =
@@ -212,6 +267,8 @@ class GameOverlay(context: Context) {
     }
 
     fun destroy() {
+        uiHandler.removeCallbacks(hudHide)
+        hudHide.run()
         active = false
         panelOpen = false
         closeEditor()

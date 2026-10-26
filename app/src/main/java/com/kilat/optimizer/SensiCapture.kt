@@ -236,6 +236,15 @@ class SensiOverlay(
         }, holdMs)
     }
 
+    /** Dipanggil sebelum jari suntik pertama: lupakan sisa jari lama di penyuntik, kecuali zona lain sedang aktif. */
+    fun resetInjectState(self: ZoneView, deviceId: Int) {
+        if (entries.any { it.view !== self && it.view.busy }) return
+        Shell.inject(TouchInjector.ACTION_RESET, 0, 0f, 0f, 0L, SystemClock.uptimeMillis(), injectDeviceId(deviceId))
+    }
+
+    /** Ringkasan keadaan zona untuk mode uji. */
+    fun statusLine(): String = "zona terpasang ${entries.size} | suntik ${Shell.injectReady} | mentah ${raw.status}"
+
     fun strike() {
         strikes++
         if (strikes >= MAX_STRIKES) {
@@ -275,6 +284,7 @@ class ZoneView(ctx: Context, private val host: SensiOverlay) : View(ctx) {
     }
 
     private fun startTap() {
+        if (tapMode != SensiPrefs.TAP_OFF) host.debug("Aksi tap ${SensiPrefs.TAP_NAMES[tapMode]} di (${tapX.toInt()}, ${tapY.toInt()}), tekan ${tapHoldMs} ms")
         when (tapMode) {
             SensiPrefs.TAP_ONCE -> host.tap(tapX, tapY, deviceId, tapHoldMs)
             SensiPrefs.TAP_DOUBLE -> {
@@ -342,7 +352,13 @@ class ZoneView(ctx: Context, private val host: SensiOverlay) : View(ctx) {
     @SuppressLint("ClickableViewAccessibility")
     override fun onTouchEvent(e: MotionEvent): Boolean {
         when (e.actionMasked) {
-            MotionEvent.ACTION_DOWN -> if (state == S.IDLE) begin(e)
+            MotionEvent.ACTION_DOWN -> {
+                // ACTION_DOWN hanya datang bila tidak ada jari lain di jendela ini, jadi gestur sebelumnya pasti
+                // sudah selesai. Bila statusnya masih tersangkut (mis. UP tidak pernah sampai), akhiri dulu.
+                if (state != S.IDLE) forceEnd()
+                host.debug("Zona tersentuh di (${e.rawX.toInt()}, ${e.rawY.toInt()})")
+                begin(e)
+            }
             MotionEvent.ACTION_MOVE -> if (state != S.IDLE) {
                 dbgMoves++
                 if (state == S.ACTIVE) dbgAfter++
@@ -367,6 +383,13 @@ class ZoneView(ctx: Context, private val host: SensiOverlay) : View(ctx) {
             }
         }
         return true
+    }
+
+    /** Mengakhiri gestur yang tersangkut tanpa menghitungnya sebagai pembatalan dini. */
+    private fun forceEnd() {
+        removeCallbacks(activate)
+        if (state == S.ACTIVE) host.inject(MotionEvent.ACTION_UP, ipX, ipY, injDownTime, deviceId)
+        reset()
     }
 
     private fun begin(e: MotionEvent) {
@@ -403,9 +426,12 @@ class ZoneView(ctx: Context, private val host: SensiOverlay) : View(ctx) {
 
     private fun onActivate() {
         if (state != S.WAIT) return
+        host.resetInjectState(this, deviceId)
         injDownTime = SystemClock.uptimeMillis()
         if (!host.inject(MotionEvent.ACTION_DOWN, ipX, ipY, injDownTime, deviceId)) {
+            host.debug("Suntik DOWN GAGAL: jalur suntik tidak merespons")
             state = S.IDLE
+            host.setAway(this, false)
             return
         }
         state = S.ACTIVE
