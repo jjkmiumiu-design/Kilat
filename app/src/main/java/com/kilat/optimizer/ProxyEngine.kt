@@ -41,9 +41,6 @@ class ProxyEngine(private val sink: TouchSink, private val sched: ScheduledExecu
     @Volatile var maxY = 1
     @Volatile var zones: List<ProxyZone> = emptyList()
 
-    /** false: tombol ditahan di tepi layar. true: diangkat lalu ditekan lagi di titik awal (kamera tanpa batas). */
-    @Volatile var edgeRestart = false
-
     private class Finger(val zone: ProxyZone?, x: Float, y: Float) {
         var curX = x          // posisi jari asli di layar
         var curY = y
@@ -57,6 +54,7 @@ class ProxyEngine(private val sink: TouchSink, private val sched: ScheduledExecu
         var outY = y
         var repeat: ScheduledFuture<*>? = null
         var lastFollow = 0L
+        var lastRestart = 0L
     }
 
     private val tid = IntArray(SLOTS) { -1 }
@@ -159,22 +157,25 @@ class ProxyEngine(private val sink: TouchSink, private val sched: ScheduledExecu
         val maxX = w - MARGIN
         val maxY = h - MARGIN
         if (ox < MARGIN || ox > maxX || oy < MARGIN || oy > maxY) {
-            if (edgeRestart) {
-                // Angkat lalu letakkan lagi di titik awal: kamera tetap berlanjut, tombol kembali ke titik awal.
-                val t = sink.now()
+            val t = sink.now()
+            if (t - f.lastRestart >= RESTART_GAP_MS) {
+                // Geseran yang dilebarkan sudah sampai tepi layar. Supaya kamera tetap licin tanpa batas, jari
+                // suntik diangkat dan diletakkan lagi tepat di bawah jari asli: tombol tetap ikut jari.
                 sink.touch(A_UP, i, f.outX, f.outY, gestureDown, t)
                 if (downCount == 1) gestureDown = t
+                val nx = px.coerceIn(MARGIN, maxX)
+                val ny = py.coerceIn(MARGIN, maxY)
                 f.anchorX = px
                 f.anchorY = py
-                f.baseX = f.startX
-                f.baseY = f.startY
-                sink.touch(A_DOWN, i, f.startX, f.startY, gestureDown, t)
-                ox = f.startX
-                oy = f.startY
-                dlog("Geser mentok layar, jari ${i + 1} diulang dari titik awal")
+                f.baseX = nx
+                f.baseY = ny
+                f.lastRestart = t
+                sink.touch(A_DOWN, i, nx, ny, gestureDown, t)
+                ox = nx
+                oy = ny
+                dlog("Geser mentok layar, jari ${i + 1} dipasang ulang di bawah jari")
             } else {
-                // Tahan di tepi (tombol tidak diangkat). Titik acuan ikut digeser supaya saat jari berbalik
-                // arah, geseran langsung bereaksi tanpa jarak mati.
+                // Baru saja dipasang ulang dan masih mentok (jari dekat tepi): tahan di tepi, jangan berkedip.
                 if (ox < MARGIN) { ox = MARGIN; f.anchorX = px - (ox - f.baseX) / z.sx }
                 else if (ox > maxX) { ox = maxX; f.anchorX = px - (ox - f.baseX) / z.sx }
                 if (oy < MARGIN) { oy = MARGIN; f.anchorY = py - (oy - f.baseY) / z.sy }
@@ -240,6 +241,7 @@ class ProxyEngine(private val sink: TouchSink, private val sched: ScheduledExecu
         const val MARGIN = 12f
         const val DOUBLE_GAP_MS = 60L
         const val FOLLOW_MS = 33L
+        const val RESTART_GAP_MS = 80L
 
         const val EV_SYN = 0
         const val EV_ABS = 3

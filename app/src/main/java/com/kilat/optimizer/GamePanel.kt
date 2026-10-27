@@ -86,7 +86,6 @@ class GamePanel(
     private val sensiStatus = TextView(ctx)
     private val sensiCount = TextView(ctx)
     private val posChips = ArrayList<TextView>()
-    private val edgeChips = ArrayList<TextView>()
     private lateinit var globalX: StepSlider
     private lateinit var globalY: StepSlider
     private val styleIcons = ArrayList<StyleIcon>()
@@ -328,32 +327,6 @@ class GamePanel(
             lp(top = 6),
         )
 
-        sensiBox.addView(label("Saat geser mentok layar"), lp(top = 14))
-        val edgeRow = LinearLayout(ctx).apply { orientation = LinearLayout.HORIZONTAL }
-        listOf("TAHAN DI TEPI", "ULANG DARI AWAL").forEachIndexed { i, name ->
-            val chip = TextView(ctx).apply {
-                text = name
-                gravity = Gravity.CENTER
-                textSize = 12f
-                typeface = Typeface.DEFAULT_BOLD
-                setOnClickListener {
-                    GameToolsPrefs.prefs(ctx).edit().putBoolean("sensi_edge", i == 1).apply()
-                    bind(cur)
-                }
-            }
-            edgeChips += chip
-            edgeRow.addView(chip, LinearLayout.LayoutParams(0, dp(42), 1f).apply { if (i > 0) leftMargin = dp(8) })
-        }
-        sensiBox.addView(edgeRow, lp(top = 8))
-        sensiBox.addView(
-            TextView(ctx).apply {
-                text = "Tahan di tepi: tombol tembak tetap ikut jari dan tidak turun, tapi kamera berhenti kalau sudah mentok. Ulang dari awal: kamera terus muter, tombol kembali ke titik awal."
-                setTextColor(MUTED)
-                textSize = 12f
-            },
-            lp(top = 6),
-        )
-
         sensiBox.addView(label("Sensitivity global"), lp(top = 14))
         globalX = StepSlider(ctx, "Sensitivity X") { SensiPrefs.setGlobal(ctx, x = it) }
         globalY = StepSlider(ctx, "Sensitivity Y") { SensiPrefs.setGlobal(ctx, y = it) }
@@ -428,17 +401,6 @@ class GamePanel(
             val cur0 = SensiPrefs.presetOf(sd)
             posChips.forEachIndexed { i, chip ->
                 val sel = i == cur0
-                chip.background = GradientDrawable().apply {
-                    cornerRadius = dp(12).toFloat()
-                    setColor(if (sel) Color.argb(0x33, 138, 63, 252) else CHIP_BG)
-                    setStroke(dp(if (sel) 2 else 1), if (sel) ACCENT else LINE)
-                }
-                chip.setTextColor(if (sel) TEXT else MUTED)
-            }
-
-            val edgeSel = if (GameToolsPrefs.prefs(ctx).getBoolean("sensi_edge", false)) 1 else 0
-            edgeChips.forEachIndexed { i, chip ->
-                val sel = i == edgeSel
                 chip.background = GradientDrawable().apply {
                     cornerRadius = dp(12).toFloat()
                     setColor(if (sel) Color.argb(0x33, 138, 63, 252) else CHIP_BG)

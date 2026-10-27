@@ -55,7 +55,6 @@ class SensiProxy(
     private var grabSent = false
     private var sig = ""
     private var sentDebug = false
-    private var sentEdge = -1
 
     private var marker: MarkerView? = null
     private var markerLp: WindowManager.LayoutParams? = null
@@ -107,11 +106,6 @@ class SensiProxy(
             sig = newSig
             updateMarker(w, h, data, density)
         }
-        val edge = if (GameToolsPrefs.prefs(ctx).getBoolean("sensi_edge", false)) 1 else 0
-        if (edge != sentEdge) {
-            send("M $edge")
-            sentEdge = edge
-        }
         if (debugOn != sentDebug) {
             send("D ${if (debugOn) 1 else 0}")
             sentDebug = debugOn
@@ -150,7 +144,6 @@ class SensiProxy(
         writer = null
         ready = false
         starting = false
-        sentEdge = -1
         sentDebug = false
         Thread {
             try { w?.write("Q\n"); w?.flush() } catch (e: Throwable) { }
@@ -268,7 +261,6 @@ class SensiProxy(
         starting = false
         grabSent = false
         sig = ""
-        sentEdge = -1
         sentDebug = false
         state = "mati"
         main.removeCallbacks(beat)
