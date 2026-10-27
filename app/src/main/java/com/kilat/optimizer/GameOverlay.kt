@@ -84,11 +84,15 @@ class GameOverlay(context: Context) {
     private var editing = false
     private var editor: SensiEditor? = null
 
-    private val sensi = SensiOverlay(ctx, wm, { screenSize() }) {
-        // Sistem menolak pola sentuhan ini berulang kali: matikan fitur supaya game tetap bisa dimainkan.
-        GameToolsPrefs.setSensiOn(ctx, false)
-        Toast.makeText(ctx, "Zona sensi dimatikan: ROM ini tidak meneruskan sentuhan dengan benar", Toast.LENGTH_LONG).show()
-    }
+    private val sensi = SensiHub(
+        ctx, wm, { screenSize() },
+        onUnsupported = {
+            // Sistem menolak pola sentuhan ini berulang kali: matikan fitur supaya game tetap bisa dimainkan.
+            GameToolsPrefs.setSensiOn(ctx, false)
+            Toast.makeText(ctx, "Zona sensi dimatikan: ROM ini tidak meneruskan sentuhan dengan benar", Toast.LENGTH_LONG).show()
+        },
+        onNote = { hudPost(it) },
+    )
 
     // Papan uji: tulisan kecil di atas layar (jendela sendiri). Toast tidak dipakai karena banyak ROM
     // menyembunyikan toast dari layanan latar, jadi pesan uji tidak pernah terlihat.
@@ -272,7 +276,7 @@ class GameOverlay(context: Context) {
         active = false
         panelOpen = false
         closeEditor()
-        sensi.hide()
+        sensi.destroy()
         sync()
     }
 
