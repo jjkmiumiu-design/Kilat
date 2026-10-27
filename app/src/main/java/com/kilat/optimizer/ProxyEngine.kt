@@ -41,6 +41,9 @@ class ProxyEngine(private val sink: TouchSink, private val sched: ScheduledExecu
     @Volatile var maxY = 1
     @Volatile var zones: List<ProxyZone> = emptyList()
 
+    /** false: tombol ditahan di tepi layar. true: diangkat lalu ditekan lagi di titik awal (kamera tanpa batas). */
+    @Volatile var edgeRestart = false
+
     private class Finger(val zone: ProxyZone?, x: Float, y: Float) {
         var curX = x          // posisi jari asli di layar
         var curY = y
@@ -153,14 +156,31 @@ class ProxyEngine(private val sink: TouchSink, private val sched: ScheduledExecu
         var ox = f.baseX + (px - f.anchorX) * z.sx
         var oy = f.baseY + (py - f.anchorY) * z.sy
         if (z.sx <= 0f || z.sy <= 0f) return
-        // Titik suntik menyentuh tepi layar: tahan di tepi (jari suntik tidak diangkat, tombol tetap ditekan).
-        // Titik acuan ikut digeser supaya saat jari berbalik arah, geseran langsung bereaksi tanpa jarak mati.
         val maxX = w - MARGIN
         val maxY = h - MARGIN
-        if (ox < MARGIN) { ox = MARGIN; f.anchorX = px - (ox - f.baseX) / z.sx }
-        else if (ox > maxX) { ox = maxX; f.anchorX = px - (ox - f.baseX) / z.sx }
-        if (oy < MARGIN) { oy = MARGIN; f.anchorY = py - (oy - f.baseY) / z.sy }
-        else if (oy > maxY) { oy = maxY; f.anchorY = py - (oy - f.baseY) / z.sy }
+        if (ox < MARGIN || ox > maxX || oy < MARGIN || oy > maxY) {
+            if (edgeRestart) {
+                // Angkat lalu letakkan lagi di titik awal: kamera tetap berlanjut, tombol kembali ke titik awal.
+                val t = sink.now()
+                sink.touch(A_UP, i, f.outX, f.outY, gestureDown, t)
+                if (downCount == 1) gestureDown = t
+                f.anchorX = px
+                f.anchorY = py
+                f.baseX = f.startX
+                f.baseY = f.startY
+                sink.touch(A_DOWN, i, f.startX, f.startY, gestureDown, t)
+                ox = f.startX
+                oy = f.startY
+                dlog("Geser mentok layar, jari ${i + 1} diulang dari titik awal")
+            } else {
+                // Tahan di tepi (tombol tidak diangkat). Titik acuan ikut digeser supaya saat jari berbalik
+                // arah, geseran langsung bereaksi tanpa jarak mati.
+                if (ox < MARGIN) { ox = MARGIN; f.anchorX = px - (ox - f.baseX) / z.sx }
+                else if (ox > maxX) { ox = maxX; f.anchorX = px - (ox - f.baseX) / z.sx }
+                if (oy < MARGIN) { oy = MARGIN; f.anchorY = py - (oy - f.baseY) / z.sy }
+                else if (oy > maxY) { oy = maxY; f.anchorY = py - (oy - f.baseY) / z.sy }
+            }
+        }
         f.outX = ox
         f.outY = oy
         val t = sink.now()

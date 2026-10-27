@@ -25,6 +25,7 @@ import kotlin.system.exitProcess
  *   masuk  : "S <lebar> <tinggi> <rotasi>"   ukuran layar saat ini
  *            "Z <id,cx,cy,r,sx,sy,tap,tx,ty,rep,hold;...>"  daftar zona (piksel), kosong = tanpa zona
  *            "D <0|1>"  log uji
+ *            "M <0|1>"  mentok layar: 0 tahan di tepi, 1 ulang dari titik awal
  *            "G <0|1>"  ambil alih layar sentuh (1) atau lepas (0)
  *            "H"        detak: tanpa detak 8 detik, grab dilepas sendiri
  *            "Q"        berhenti
@@ -100,6 +101,7 @@ object ProxyDaemon {
                 engine.sh = p[1].toInt()
             }
             'D' -> engine.debug = rest.trim() == "1"
+            'M' -> engine.edgeRestart = rest.trim() == "1"
             'Z' -> engine.zones = if (rest.isBlank()) emptyList() else rest.split(';').filter { it.isNotBlank() }.map {
                 val p = it.split(',')
                 ProxyZone(
