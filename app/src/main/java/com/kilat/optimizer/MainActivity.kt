@@ -66,7 +66,11 @@ class MainActivity : ComponentActivity() {
                             delay(1000)
                         }
                     }
-                    App(vm, LicenseResult.Valid(name, exp))
+                    App(vm, LicenseResult.Valid(name, exp)) {
+                        License.clear(ctx)
+                        notice = null
+                        exp = LOCKED
+                    }
                 }
             }
         }
