@@ -1,12 +1,10 @@
 package com.kilat.optimizer.ui
 
 import android.graphics.Typeface
-import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ProvideTextStyle
 import androidx.compose.material3.Typography
 import androidx.compose.material3.darkColorScheme
-import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.staticCompositionLocalOf
@@ -15,10 +13,10 @@ import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontFamily
 
 /**
- * Palet Kilat. Abu-abu netral, satu warna aksen kuning, tanpa gradasi dan bayangan.
- *  - accent : kuning. Dipakai sebagai isian (tombol, saklar aktif), selalu dengan teks [accentInk].
- *  - link   : warna aksen untuk teks kecil di atas latar. Gelap: kuning. Terang: cokelat tua
- *             (kuning di atas latar terang tidak terbaca).
+ * Palet Kilat. Hitam, kartu membulat bergaris tepi tipis, satu aksen kuning.
+ * Tombol dan tab terpilih sedikit 3D (gradasi + garis cahaya putih tipis).
+ *  - accent : ungu. Dipakai sebagai isian (tombol, saklar aktif), selalu dengan teks [accentInk].
+ *  - link   : ungu muda untuk judul dan teks tebal di atas latar gelap.
  *  - bad/warn : merah untuk masalah, jingga untuk peringatan.
  */
 data class KilatColors(
@@ -35,22 +33,19 @@ data class KilatColors(
     val warn: Color,
     val bad: Color,
     val track: Color,
+    /** Tombol dan tab "3D": gradasi gelap kekuningan dengan garis cahaya putih tipis di tepi atas. */
+    val keyTop: Color,
+    val keyBottom: Color,
+    val sheen: Color,
 )
 
 private val DarkColors = KilatColors(
-    bg = Color(0xFF151618), surface = Color(0xFF1D1E21), surface2 = Color(0xFF26282C),
-    line = Color(0xFF2E3035), fg = Color(0xFFECEBE7), muted = Color(0xFF9B9DA2),
-    accent = Color(0xFFF2BE0C), accentInk = Color(0xFF181400), link = Color(0xFFF2BE0C),
-    good = Color(0xFF6FBF86), warn = Color(0xFFF09A3A), bad = Color(0xFFEE5A4D),
-    track = Color(0xFF34363B),
-)
-
-private val LightColors = KilatColors(
-    bg = Color(0xFFF4F3EF), surface = Color(0xFFFFFFFF), surface2 = Color(0xFFEAE9E4),
-    line = Color(0xFFD6D4CD), fg = Color(0xFF1A1A1C), muted = Color(0xFF65676B),
-    accent = Color(0xFFF2BE0C), accentInk = Color(0xFF181400), link = Color(0xFF7A5800),
-    good = Color(0xFF2E7D4A), warn = Color(0xFFA85A06), bad = Color(0xFFC0392B),
-    track = Color(0xFFD9D7D0),
+    bg = Color(0xFF0A0A08), surface = Color(0xFF121210), surface2 = Color(0xFF1C1B16),
+    line = Color(0xFF2E2C22), fg = Color(0xFFF2F0E6), muted = Color(0xFF98958A),
+    accent = Color(0xFFF5C518), accentInk = Color(0xFF1A1400), link = Color(0xFFFFD84D),
+    good = Color(0xFF4CB36E), warn = Color(0xFFF0A23A), bad = Color(0xFFF0605A),
+    track = Color(0xFF2E2C22),
+    keyTop = Color(0xFF3A3320), keyBottom = Color(0xFF1A170E), sheen = Color(0x80FFFFFF),
 )
 
 val LocalK = staticCompositionLocalOf { DarkColors }
@@ -88,19 +83,12 @@ private fun kTypography(): Typography {
 
 @Composable
 fun KilatTheme(content: @Composable () -> Unit) {
-    val dark = isSystemInDarkTheme()
-    val c = if (dark) DarkColors else LightColors
-    val scheme = if (dark) {
-        darkColorScheme(
-            primary = c.accent, onPrimary = c.accentInk, background = c.bg, surface = c.surface,
-            onSurface = c.fg, onBackground = c.fg,
-        )
-    } else {
-        lightColorScheme(
-            primary = c.accent, onPrimary = c.accentInk, background = c.bg, surface = c.surface,
-            onSurface = c.fg, onBackground = c.fg,
-        )
-    }
+    // Tampilan Kilat hanya satu: hitam dan kuning.
+    val c = DarkColors
+    val scheme = darkColorScheme(
+        primary = c.accent, onPrimary = c.accentInk, background = c.bg, surface = c.surface,
+        onSurface = c.fg, onBackground = c.fg,
+    )
     CompositionLocalProvider(LocalK provides c) {
         MaterialTheme(colorScheme = scheme, typography = kTypography()) {
             ProvideTextStyle(TextStyle(fontFamily = KFont.body)) { content() }
