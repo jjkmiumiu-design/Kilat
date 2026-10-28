@@ -53,6 +53,9 @@ class SensiEditor(
     private val repeatBar = SeekBar(ctx)
     private val repeatLabel = TextView(ctx)
     private val repeatRow = LinearLayout(ctx)
+    private val holdBar = SeekBar(ctx)
+    private val holdLabel = TextView(ctx)
+    private val holdRow = LinearLayout(ctx)
     private val tapHint = TextView(ctx)
     private val dialogLayer = FrameLayout(ctx)
 
@@ -118,7 +121,7 @@ class SensiEditor(
         setTextColor(TEXT)
         gravity = Gravity.CENTER
         setPadding(dp(14), dp(8), dp(14), dp(8))
-        background = box(14, Color.argb(0x33, 242, 190, 12), ACCENT, 1)
+        background = box(14, Color.argb(0x33, 245, 197, 24), ACCENT, 1)
         setOnClickListener { onClick() }
     }
 
@@ -127,7 +130,7 @@ class SensiEditor(
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER_VERTICAL
             setPadding(dp(8), dp(6), dp(8), dp(6))
-            background = box(26, Color.argb(0xEE, 0x12, 0x13, 0x15), ACCENT, 1)
+            background = box(26, Color.argb(0xEE, 0x12, 0x11, 0x0C), ACCENT, 1)
         }
         val items = listOf<Pair<String, () -> Unit>>(
             "+" to { addZone() },
@@ -144,7 +147,7 @@ class SensiEditor(
     private fun buildCard() {
         card.orientation = LinearLayout.VERTICAL
         card.setPadding(dp(12), dp(10), dp(12), dp(12))
-        card.background = box(18, Color.argb(0xEE, 0x12, 0x13, 0x15))
+        card.background = box(18, Color.argb(0xEE, 0x12, 0x11, 0x0C))
 
         val row1 = LinearLayout(ctx).apply { orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL }
         cardName.textSize = 14f
@@ -152,7 +155,7 @@ class SensiEditor(
         cardName.setTextColor(TEXT)
         cardName.gravity = Gravity.CENTER
         cardName.setPadding(dp(14), dp(8), dp(14), dp(8))
-        cardName.background = box(14, Color.argb(0x33, 242, 190, 12), ACCENT, 1)
+        cardName.background = box(14, Color.argb(0x33, 245, 197, 24), ACCENT, 1)
         row1.addView(cardName, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
         row1.addView(outlineButton("Hapus") { deleteSelected() }, LinearLayout.LayoutParams(
             ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply { leftMargin = dp(8) })
@@ -223,6 +226,27 @@ class SensiEditor(
             topMargin = dp(6)
         })
 
+        holdRow.orientation = LinearLayout.VERTICAL
+        holdLabel.textSize = 12f
+        holdLabel.setTextColor(MUTED)
+        holdRow.addView(holdLabel)
+        holdBar.max = (SensiPrefs.HOLD_MAX - SensiPrefs.HOLD_MIN) / SensiPrefs.HOLD_STEP
+        holdBar.progressTintList = ColorStateList.valueOf(ACCENT)
+        holdBar.thumbTintList = ColorStateList.valueOf(ACCENT)
+        holdBar.progressBackgroundTintList = ColorStateList.valueOf(LINE)
+        holdBar.setOnSeekBarChangeListener(object : SeekBar.OnSeekBarChangeListener {
+            override fun onProgressChanged(seekBar: SeekBar, progress: Int, fromUser: Boolean) {
+                if (fromUser) setHold(SensiPrefs.HOLD_MIN + progress * SensiPrefs.HOLD_STEP)
+            }
+
+            override fun onStartTrackingTouch(seekBar: SeekBar) {}
+            override fun onStopTrackingTouch(seekBar: SeekBar) {}
+        })
+        holdRow.addView(holdBar)
+        card.addView(holdRow, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply {
+            topMargin = dp(6)
+        })
+
         tapHint.textSize = 11f
         tapHint.setTextColor(ACCENT)
         card.addView(tapHint, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply {
@@ -235,6 +259,14 @@ class SensiEditor(
         if (i < 0) return
         zones[i] = zones[i].copy(tap = mode)
         refreshCard()
+    }
+
+    private fun setHold(ms: Int) {
+        val i = selectedIndex()
+        if (i < 0) return
+        zones[i] = zones[i].copy(holdMs = ms.coerceIn(SensiPrefs.HOLD_MIN, SensiPrefs.HOLD_MAX))
+        holdLabel.text = "Durasi tekan: ${zones[i].holdMs} ms"
+        canvas.invalidate()
     }
 
     private fun setRepeat(ms: Int) {
@@ -252,7 +284,7 @@ class SensiEditor(
         val scroll = MaxHeightScrollView(ctx)
         scroll.maxHeightPx = (screenH * 0.92f).toInt()
         scroll.isVerticalScrollBarEnabled = false
-        scroll.background = box(20, Color.argb(0xF6, 0x12, 0x13, 0x15))
+        scroll.background = box(20, Color.argb(0xF6, 0x12, 0x11, 0x0C))
 
         val col = LinearLayout(ctx).apply {
             orientation = LinearLayout.VERTICAL
@@ -273,7 +305,7 @@ class SensiEditor(
         gRow.addView(label("Sensitivity Global", 14f, TEXT, true), LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
         val states = arrayOf(intArrayOf(android.R.attr.state_checked), intArrayOf())
         dialogSwitch.thumbTintList = ColorStateList(states, intArrayOf(ACCENT, Color.rgb(0xCC, 0xD3, 0xD9)))
-        dialogSwitch.trackTintList = ColorStateList(states, intArrayOf(Color.argb(0x88, 242, 190, 12), Color.argb(0x55, 255, 255, 255)))
+        dialogSwitch.trackTintList = ColorStateList(states, intArrayOf(Color.argb(0x88, 245, 197, 24), Color.argb(0x55, 255, 255, 255)))
         dialogSwitch.setOnCheckedChangeListener { _, on ->
             dGlobal = on
             showDialogValues()
@@ -316,12 +348,15 @@ class SensiEditor(
             val mode = zones[i].tap
             tapChips.forEachIndexed { k, c ->
                 val sel = k == mode
-                c.background = box(10, if (sel) Color.argb(0x33, 242, 190, 12) else CHIP_BG, if (sel) ACCENT else LINE, 1)
+                c.background = box(10, if (sel) Color.argb(0x33, 245, 197, 24) else CHIP_BG, if (sel) ACCENT else LINE, 1)
                 c.setTextColor(if (sel) TEXT else MUTED)
             }
             repeatRow.visibility = if (mode == SensiPrefs.TAP_REPEAT) View.VISIBLE else View.GONE
             repeatBar.progress = (zones[i].repeatMs - SensiPrefs.REPEAT_MIN) / SensiPrefs.REPEAT_STEP
             repeatLabel.text = "Jarak ketukan: ${zones[i].repeatMs} ms"
+            holdRow.visibility = if (mode == SensiPrefs.TAP_OFF) View.GONE else View.VISIBLE
+            holdBar.progress = (zones[i].holdMs - SensiPrefs.HOLD_MIN) / SensiPrefs.HOLD_STEP
+            holdLabel.text = "Durasi tekan: ${zones[i].holdMs} ms"
             tapHint.visibility = if (mode == SensiPrefs.TAP_OFF) View.GONE else View.VISIBLE
             tapHint.text = when (mode) {
                 SensiPrefs.TAP_ONCE -> "Jari menyentuh zona: titik T diketuk sekali. Seret T untuk memindahkan."
@@ -518,7 +553,7 @@ class SensiEditor(
             c.drawLine(cx, cy, tx, ty, line)
             line.pathEffect = null
             val r = dp(15).toFloat()
-            fill.color = Color.argb(if (sel) 0xCC else 0x66, 0x12, 0x13, 0x15)
+            fill.color = Color.argb(if (sel) 0xCC else 0x66, 0x12, 0x11, 0x0C)
             c.drawCircle(tx, ty, r, fill)
             line.color = Color.argb(a, 0x6F, 0xBF, 0x86)
             line.strokeWidth = dp(2).toFloat()
@@ -542,7 +577,7 @@ class SensiEditor(
                 val cy = z.cy * height
                 val r = dp(z.sizeDp) / 2f
                 val sel = z.id == selected
-                fill.color = Color.argb(if (sel) 0x4D else 0x2E, 242, 190, 12)
+                fill.color = Color.argb(if (sel) 0x4D else 0x2E, 245, 197, 24)
                 c.drawCircle(cx, cy, r, fill)
                 line.color = ACCENT
                 line.strokeWidth = dp(if (sel) 3 else 2).toFloat()

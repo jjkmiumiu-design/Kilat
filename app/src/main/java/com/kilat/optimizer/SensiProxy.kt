@@ -104,7 +104,8 @@ class SensiProxy(
             send("S $w $h $rot")
             send("Z $zoneStr")
             sig = newSig
-            updateMarker(w, h, data, density)
+            // Penanda zona sengaja tidak digambar di dalam game. Zona tetap bekerja, hanya tidak terlihat.
+            if (SHOW_MARKER) updateMarker(w, h, data, density) else removeMarker()
         }
         if (debugOn != sentDebug) {
             send("D ${if (debugOn) 1 else 0}")
@@ -333,6 +334,9 @@ class SensiProxy(
     }
 }
 
+/** true: gambar lingkaran penanda zona di atas game. false: zona tak terlihat (tetap berfungsi). */
+private const val SHOW_MARKER = false
+
 private class Ring(val id: Int, val cx: Float, val cy: Float, val r: Float)
 
 /**
@@ -348,7 +352,7 @@ private class MarkerView(ctx: Context, density: Float) : View(ctx) {
 
     private val fill = Paint(Paint.ANTI_ALIAS_FLAG).apply {
         style = Paint.Style.FILL
-        color = Color.argb(34, 138, 63, 252)
+        color = Color.argb(34, 245, 197, 24)
     }
     private val stroke = Paint(Paint.ANTI_ALIAS_FLAG).apply {
         style = Paint.Style.STROKE
@@ -357,7 +361,7 @@ private class MarkerView(ctx: Context, density: Float) : View(ctx) {
     }
     private val hot = Paint(Paint.ANTI_ALIAS_FLAG).apply {
         style = Paint.Style.FILL
-        color = Color.argb(90, 171, 120, 255)
+        color = Color.argb(90, 245, 197, 24)
     }
     private val hotStroke = Paint(Paint.ANTI_ALIAS_FLAG).apply {
         style = Paint.Style.STROKE

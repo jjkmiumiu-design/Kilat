@@ -18,9 +18,9 @@ import android.widget.TextView
 import kotlin.math.min
 import kotlin.math.roundToInt
 
-internal val ACCENT = Color.rgb(171, 120, 255)
-internal val PANEL_BG = Color.argb(0xF2, 0x12, 0x0D, 0x1C)
-internal val CHIP_BG = Color.rgb(0x26, 0x1B, 0x3A)
+internal val ACCENT = Color.rgb(245, 197, 24)
+internal val PANEL_BG = Color.argb(0xF2, 0x12, 0x11, 0x0C)
+internal val CHIP_BG = Color.rgb(0x1E, 0x1C, 0x14)
 internal val LINE = Color.argb(0x55, 0xFF, 0xFF, 0xFF)
 internal val TEXT = Color.rgb(0xEC, 0xEB, 0xE7)
 internal val MUTED = Color.rgb(0x9B, 0x9D, 0xA2)
@@ -147,7 +147,7 @@ class GamePanel(
 
         val states = arrayOf(intArrayOf(android.R.attr.state_checked), intArrayOf())
         toggle.thumbTintList = ColorStateList(states, intArrayOf(ACCENT, Color.rgb(0xCC, 0xD3, 0xD9)))
-        toggle.trackTintList = ColorStateList(states, intArrayOf(Color.argb(0x88, 138, 63, 252), Color.argb(0x55, 255, 255, 255)))
+        toggle.trackTintList = ColorStateList(states, intArrayOf(Color.argb(0x88, 245, 197, 24), Color.argb(0x55, 255, 255, 255)))
         toggle.setOnCheckedChangeListener { _, on ->
             if (binding) return@setOnCheckedChangeListener
             when (tab) {
@@ -344,7 +344,7 @@ class GamePanel(
             gravity = Gravity.CENTER
             background = GradientDrawable().apply {
                 cornerRadius = dp(14).toFloat()
-                setColor(Color.argb(0x33, 138, 63, 252))
+                setColor(Color.argb(0x33, 245, 197, 24))
                 setStroke(dp(1), ACCENT)
             }
             setOnClickListener { onEditZones() }
@@ -367,10 +367,13 @@ class GamePanel(
 
     // ---------- sinkron dengan pengaturan ----------
 
-    private fun pill(sel: Boolean) = GradientDrawable().apply {
+    /** Tab terpilih: sedikit 3D (gradasi gelap kekuningan) dengan garis cahaya putih tipis. */
+    private fun pill(sel: Boolean) = GradientDrawable(
+        GradientDrawable.Orientation.TOP_BOTTOM,
+        if (sel) intArrayOf(Color.rgb(0x3A, 0x33, 0x20), Color.rgb(0x1A, 0x17, 0x0E)) else intArrayOf(Color.TRANSPARENT, Color.TRANSPARENT),
+    ).apply {
         cornerRadius = dp(11).toFloat()
-        setColor(if (sel) Color.argb(0x33, 138, 63, 252) else Color.TRANSPARENT)
-        setStroke(dp(1), if (sel) ACCENT else Color.TRANSPARENT)
+        setStroke(dp(1), if (sel) Color.argb(0x80, 255, 255, 255) else Color.TRANSPARENT)
     }
 
     /** Memperbarui seluruh tampilan panel sesuai pengaturan. Tidak menulis balik ke pengaturan. */
@@ -403,7 +406,7 @@ class GamePanel(
                 val sel = i == cur0
                 chip.background = GradientDrawable().apply {
                     cornerRadius = dp(12).toFloat()
-                    setColor(if (sel) Color.argb(0x33, 138, 63, 252) else CHIP_BG)
+                    setColor(if (sel) Color.argb(0x33, 245, 197, 24) else CHIP_BG)
                     setStroke(dp(if (sel) 2 else 1), if (sel) ACCENT else LINE)
                 }
                 chip.setTextColor(if (sel) TEXT else MUTED)
@@ -427,7 +430,7 @@ class GamePanel(
                 val sel = i == s.fpsCorner
                 chip.background = GradientDrawable().apply {
                     cornerRadius = dp(12).toFloat()
-                    setColor(if (sel) Color.argb(0x33, 138, 63, 252) else CHIP_BG)
+                    setColor(if (sel) Color.argb(0x33, 245, 197, 24) else CHIP_BG)
                     setStroke(dp(if (sel) 2 else 1), if (sel) ACCENT else LINE)
                 }
                 chip.setTextColor(if (sel) TEXT else MUTED)
