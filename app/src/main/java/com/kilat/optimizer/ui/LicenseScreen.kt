@@ -1,5 +1,6 @@
 package com.kilat.optimizer.ui
 
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -44,6 +45,9 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.AnnotatedString
@@ -56,6 +60,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.kilat.optimizer.License
+import com.kilat.optimizer.R
 import com.kilat.optimizer.LicenseResult
 import com.kilat.optimizer.Shell
 import com.kilat.optimizer.ShizukuStatus
@@ -111,13 +116,23 @@ fun LicenseScreen(notice: String? = null, onUnlocked: (LicenseResult.Valid) -> U
             verticalArrangement = Arrangement.Center,
         ) {
             Column(Modifier.widthIn(max = 420.dp).fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(14.dp)) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    BoltMark(36.dp, k.accent)
-                    Spacer(Modifier.width(10.dp))
-                    Txt("Kilat", 34, FontWeight.Medium, display = true)
+                // Logo Kilat di tengah, versi di bawahnya (seperti layar masuk referensi).
+                Column(Modifier.fillMaxWidth(), horizontalAlignment = Alignment.CenterHorizontally) {
+                    Image(
+                        painter = painterResource(R.drawable.kilat_logo),
+                        contentDescription = "Kilat",
+                        contentScale = ContentScale.Fit,
+                        modifier = Modifier.fillMaxWidth(0.86f).widthIn(max = 340.dp),
+                    )
+                    Spacer(Modifier.height(6.dp))
+                    Text(
+                        "V " + com.kilat.optimizer.BuildConfig.VERSION_NAME,
+                        color = k.link, fontSize = 14.sp, fontWeight = FontWeight.Medium, letterSpacing = 3.sp,
+                    )
                 }
-                Txt("Masukkan license key untuk lanjut.", 15, color = k.muted)
-                Spacer(Modifier.height(6.dp))
+                Spacer(Modifier.height(10.dp))
+                Panel {
+                Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
 
                 // Status Shizuku
                 val (txt, col) = when (status) {
@@ -126,10 +141,7 @@ fun LicenseScreen(notice: String? = null, onUnlocked: (LicenseResult.Valid) -> U
                     ShizukuStatus.NEEDS_PERMISSION -> "Shizuku butuh izin" to k.warn
                     ShizukuStatus.NOT_RUNNING -> "Shizuku belum berjalan" to k.bad
                 }
-                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Lamp(col)
-                    Txt(txt, 14, FontWeight.Medium)
-                }
+                StatusPill(txt, col, ok = status == ShizukuStatus.READY)
 
                 OutlinedTextField(
                     value = key,
@@ -149,12 +161,14 @@ fun LicenseScreen(notice: String? = null, onUnlocked: (LicenseResult.Valid) -> U
                     },
                     visualTransformation = if (show) VisualTransformation.None else PasswordVisualTransformation(),
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
-                    shape = RoundedCornerShape(8.dp),
+                    shape = RoundedCornerShape(16.dp),
                     colors = OutlinedTextFieldDefaults.colors(
                         focusedTextColor = k.fg, unfocusedTextColor = k.fg,
-                        focusedBorderColor = k.fg, unfocusedBorderColor = k.line,
-                        focusedLabelColor = k.fg, unfocusedLabelColor = k.muted,
-                        cursorColor = k.fg, errorBorderColor = k.bad, errorLabelColor = k.bad,
+                        focusedBorderColor = k.link, unfocusedBorderColor = Color(0xFF3A3A4A),
+                        focusedLabelColor = k.link, unfocusedLabelColor = k.muted,
+                        cursorColor = k.link, errorBorderColor = k.bad, errorLabelColor = k.bad,
+                        focusedContainerColor = k.surface2, unfocusedContainerColor = k.surface2,
+                        errorContainerColor = k.surface2,
                     ),
                     modifier = Modifier.fillMaxWidth(),
                 )
@@ -177,7 +191,7 @@ fun LicenseScreen(notice: String? = null, onUnlocked: (LicenseResult.Valid) -> U
                             checkedColor = k.accent, checkmarkColor = k.accentInk, uncheckedColor = k.muted,
                         ),
                     )
-                    Text("Ingat saya", color = k.muted, fontSize = 14.sp)
+                    Text("Ingat saya", color = k.muted, fontSize = 15.sp)
                 }
 
                 KButton(
@@ -186,10 +200,11 @@ fun LicenseScreen(notice: String? = null, onUnlocked: (LicenseResult.Valid) -> U
                     Modifier.fillMaxWidth(),
                     enabled = key.isNotBlank() && !busy,
                 )
+                }
+                }
 
                 // Model dan HWID, untuk key yang diikat ke satu HP
-                Spacer(Modifier.height(10.dp))
-                Rule()
+                Panel {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
                         Text("Perangkat", color = k.muted, fontSize = 12.sp)
@@ -205,6 +220,7 @@ fun LicenseScreen(notice: String? = null, onUnlocked: (LicenseResult.Valid) -> U
                         clipboard.setText(AnnotatedString("Perangkat: $model\nHWID: $hwid"))
                         info = "Model dan HWID disalin"
                     }) { Text("Salin", color = k.link, fontWeight = FontWeight.Bold) }
+                }
                 }
             }
         }
