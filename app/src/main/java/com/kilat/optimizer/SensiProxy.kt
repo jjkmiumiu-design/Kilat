@@ -92,11 +92,15 @@ class SensiProxy(
         val (w, h) = screenSize()
         val rot = rotation()
         val density = ctx.resources.displayMetrics.density
-        val zoneStr = data.zones.joinToString(";") {
+        val zoneStr = data.zones.withIndex().joinToString(";") { (idx, it) ->
+            // Zona pertama di posisi Kiri/Tengah/Kanan = seluruh sepertiga layar itu licin, di mana pun jari mendarat.
+            val reg = if (idx == 0) SensiPrefs.regionIndex(it) else -1
+            val x0 = if (reg >= 0) w * reg / 3f else -1f
+            val x1 = if (reg >= 0) w * (reg + 1) / 3f else -1f
             String.format(
-                Locale.US, "%d,%.1f,%.1f,%.1f,%.3f,%.3f,%d,%.1f,%.1f,%d,%d",
+                Locale.US, "%d,%.1f,%.1f,%.1f,%.3f,%.3f,%d,%.1f,%.1f,%d,%d,%.1f,%.1f",
                 it.id, it.cx * w, it.cy * h, it.sizeDp * density / 2f, data.xOf(it), data.yOf(it),
-                it.tap, it.tx * w, it.ty * h, it.repeatMs, it.holdMs,
+                it.tap, it.tx * w, it.ty * h, it.repeatMs, it.holdMs, x0, x1,
             )
         }
         val newSig = "${w}x$h r$rot|$zoneStr"

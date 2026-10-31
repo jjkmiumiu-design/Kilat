@@ -133,6 +133,11 @@ object SensiPrefs {
     /** Preset yang cocok dengan zona pertama, atau -1 bila posisinya sudah digeser sendiri. */
     fun presetOf(d: SensiData): Int {
         val z = d.zones.firstOrNull() ?: return -1
+        return regionIndex(z)
+    }
+
+    /** 0/1/2 bila zona ada di posisi Kiri/Tengah/Kanan (maka seluruh sepertiga layar itu licin), selain itu -1. */
+    fun regionIndex(z: SensiZone): Int {
         for (i in PRESET_X.indices) if (kotlin.math.abs(z.cx - PRESET_X[i]) < 0.04f) return i
         return -1
     }

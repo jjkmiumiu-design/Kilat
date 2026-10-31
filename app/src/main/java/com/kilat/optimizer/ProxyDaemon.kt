@@ -105,6 +105,7 @@ object ProxyDaemon {
                 ProxyZone(
                     p[0].toInt(), p[1].toFloat(), p[2].toFloat(), p[3].toFloat(), p[4].toFloat(), p[5].toFloat(),
                     p[6].toInt(), p[7].toFloat(), p[8].toFloat(), p[9].toLong(), p[10].toLong(),
+                    if (p.size > 12) p[11].toFloat() else -1f, if (p.size > 12) p[12].toFloat() else -1f,
                 )
             }
             'G' -> if (rest.trim() == "1") startGrab() else stopGrab()

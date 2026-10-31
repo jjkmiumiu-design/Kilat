@@ -11,7 +11,17 @@ class ProxyZone(
     val sx: Float, val sy: Float,
     val tap: Int, val tx: Float, val ty: Float,
     val repeatMs: Long, val holdMs: Long,
-)
+    /** Bila x1 > x0: zona ini seluruh pita layar x0..x1 (tinggi penuh), bukan lingkaran. */
+    val x0: Float = -1f, val x1: Float = -1f,
+) {
+    val isBand get() = x1 > x0
+    fun hit(px: Float, py: Float): Boolean {
+        if (isBand) return px >= x0 && px < x1
+        val dx = px - cx
+        val dy = py - cy
+        return dx * dx + dy * dy <= r * r
+    }
+}
 
 /** Tujuan semua sentuhan yang sudah diproses. Di perangkat: penyuntik sentuh. Di uji: perekam. */
 interface TouchSink {
@@ -120,11 +130,9 @@ class ProxyEngine(private val sink: TouchSink, private val sched: ScheduledExecu
     }
 
     private fun down(i: Int, px: Float, py: Float) {
-        val z = zones.firstOrNull {
-            val dx = px - it.cx
-            val dy = py - it.cy
-            dx * dx + dy * dy <= it.r * it.r
-        }
+        // Lingkaran (lebih spesifik) dicek dulu, baru pita Kiri/Tengah/Kanan.
+        val zs = zones
+        val z = zs.firstOrNull { !it.isBand && it.hit(px, py) } ?: zs.firstOrNull { it.isBand && it.hit(px, py) }
         val f = Finger(z, px, py)
         fingers[i] = f
         val t = sink.now()

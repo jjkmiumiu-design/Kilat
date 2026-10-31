@@ -4,7 +4,6 @@ import android.content.Context
 import android.content.res.ColorStateList
 import android.graphics.Canvas
 import android.graphics.Color
-import android.graphics.Typeface
 import android.graphics.drawable.GradientDrawable
 import android.view.Gravity
 import android.view.View
@@ -142,7 +141,7 @@ class GamePanel(
         row.addView(close, LinearLayout.LayoutParams(dp(40), dp(40)))
         title.setTextColor(TEXT)
         title.textSize = 17f
-        title.typeface = Typeface.DEFAULT_BOLD
+        title.typeface = KilatFont.get(ctx)
         row.addView(title, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
 
         val states = arrayOf(intArrayOf(android.R.attr.state_checked), intArrayOf())
@@ -189,7 +188,7 @@ class GamePanel(
     private fun valueText(v: TextView) = v.apply {
         setTextColor(TEXT)
         textSize = 13f
-        typeface = Typeface.MONOSPACE
+        typeface = KilatFont.get(ctx)
     }
 
     private fun labelWithValue(text: String, value: TextView): View {
@@ -270,7 +269,7 @@ class GamePanel(
                 text = "FPS"
                 gravity = Gravity.CENTER
                 textSize = 13f
-                typeface = Typeface.MONOSPACE
+                typeface = KilatFont.get(ctx)
                 setOnClickListener { GameToolsPrefs.setFpsCorner(ctx, i) }
             }
             cornerChips += chip
@@ -293,7 +292,7 @@ class GamePanel(
 
         sensiBox.addView(label("Injeksi sentuh"), lp(top = 14))
         sensiStatus.textSize = 13f
-        sensiStatus.typeface = Typeface.DEFAULT_BOLD
+        sensiStatus.typeface = KilatFont.get(ctx)
         sensiBox.addView(sensiStatus, lp(top = 2))
         // Tahan lama untuk menyalakan mode uji (toast diagnosis tiap gestur zona).
         sensiStatus.setOnLongClickListener {
@@ -311,7 +310,7 @@ class GamePanel(
                 text = name.uppercase()
                 gravity = Gravity.CENTER
                 textSize = 13f
-                typeface = Typeface.DEFAULT_BOLD
+                typeface = KilatFont.get(ctx)
                 setOnClickListener { onPickPosition(i) }
             }
             posChips += chip
@@ -320,7 +319,7 @@ class GamePanel(
         sensiBox.addView(posRow, lp(top = 8))
         sensiBox.addView(
             TextView(ctx).apply {
-                text = "Ketuk salah satu: layar HP tampil dengan zona di posisi itu, lalu geser atau ubah ukurannya dan simpan dengan ✓."
+                text = "Ketuk salah satu: seluruh sepertiga layar itu (Kiri, Tengah, atau Kanan) jadi licin sesuai nilai X dan Y, di mana pun jari mendarat. Geser zonanya sendiri bila mau lingkaran kecil saja."
                 setTextColor(MUTED)
                 textSize = 12f
             },
@@ -339,7 +338,7 @@ class GamePanel(
         val edit = TextView(ctx).apply {
             text = "Edit zona"
             textSize = 14f
-            typeface = Typeface.DEFAULT_BOLD
+            typeface = KilatFont.get(ctx)
             setTextColor(TEXT)
             gravity = Gravity.CENTER
             background = GradientDrawable().apply {
@@ -379,6 +378,7 @@ class GamePanel(
     /** Memperbarui seluruh tampilan panel sesuai pengaturan. Tidak menulis balik ke pengaturan. */
     fun bind(s: GameToolsSettings) {
         cur = s
+        KilatFont.applyTo(root)
         binding = true
         try {
             title.text = when (tab) { 0 -> "Crosshair"; 1 -> "FPS"; else -> "Sensi" }
@@ -387,7 +387,7 @@ class GamePanel(
             tabViews.forEachIndexed { i, t ->
                 t.background = pill(i == tab)
                 t.setTextColor(if (i == tab) TEXT else MUTED)
-                t.typeface = if (i == tab) Typeface.DEFAULT_BOLD else Typeface.DEFAULT
+                t.typeface = KilatFont.get(ctx)
             }
             crossBox.visibility = if (tab == 0) View.VISIBLE else View.GONE
             fpsBox.visibility = if (tab == 1) View.VISIBLE else View.GONE

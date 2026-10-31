@@ -6,7 +6,6 @@ import android.content.res.ColorStateList
 import android.graphics.Canvas
 import android.graphics.Color
 import android.graphics.Paint
-import android.graphics.Typeface
 import android.graphics.drawable.GradientDrawable
 import android.view.Gravity
 import android.view.MotionEvent
@@ -111,13 +110,13 @@ class SensiEditor(
         this.text = text
         textSize = size
         setTextColor(color)
-        if (bold) typeface = Typeface.DEFAULT_BOLD
+        if (bold) typeface = KilatFont.get(ctx)
     }
 
     private fun outlineButton(text: String, onClick: () -> Unit) = TextView(ctx).apply {
         this.text = text
         textSize = 13f
-        typeface = Typeface.DEFAULT_BOLD
+        typeface = KilatFont.get(ctx)
         setTextColor(TEXT)
         gravity = Gravity.CENTER
         setPadding(dp(14), dp(8), dp(14), dp(8))
@@ -151,7 +150,7 @@ class SensiEditor(
 
         val row1 = LinearLayout(ctx).apply { orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL }
         cardName.textSize = 14f
-        cardName.typeface = Typeface.DEFAULT_BOLD
+        cardName.typeface = KilatFont.get(ctx)
         cardName.setTextColor(TEXT)
         cardName.gravity = Gravity.CENTER
         cardName.setPadding(dp(14), dp(8), dp(14), dp(8))
@@ -293,7 +292,7 @@ class SensiEditor(
         scroll.addView(col, ViewGroup.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT))
 
         dialogTitle.textSize = 16f
-        dialogTitle.typeface = Typeface.DEFAULT_BOLD
+        dialogTitle.typeface = KilatFont.get(ctx)
         dialogTitle.setTextColor(TEXT)
         col.addView(dialogTitle)
         col.addView(
@@ -460,7 +459,7 @@ class SensiEditor(
         private val text = Paint(Paint.ANTI_ALIAS_FLAG).apply {
             color = Color.WHITE
             textAlign = Paint.Align.CENTER
-            typeface = Typeface.DEFAULT_BOLD
+            typeface = KilatFont.get(ctx)
         }
         private var dragId = -1
         private var dragTarget = false
@@ -539,7 +538,7 @@ class SensiEditor(
         private val guide = Paint(Paint.ANTI_ALIAS_FLAG).apply {
             color = Color.argb(0x55, 255, 255, 255)
             textAlign = Paint.Align.CENTER
-            typeface = Typeface.DEFAULT_BOLD
+            typeface = KilatFont.get(ctx)
         }
 
         /** Titik T: tempat ketukan aksi tap, dengan garis putus-putus dari zona asalnya. */
@@ -572,6 +571,13 @@ class SensiEditor(
             c.drawLine(width * 2f / 3f, 0f, width * 2f / 3f, height.toFloat(), line)
             guide.textSize = dp(13).toFloat()
             for (i in 0..2) c.drawText(SensiPrefs.PRESET_NAMES[i].uppercase(), width * (2 * i + 1) / 6f, height - dp(18).toFloat(), guide)
+            zones.firstOrNull()?.let { z0 ->
+                val reg = SensiPrefs.regionIndex(z0)
+                if (reg >= 0) {
+                    fill.color = Color.argb(0x22, 245, 197, 24)
+                    c.drawRect(width * reg / 3f, 0f, width * (reg + 1) / 3f, height.toFloat(), fill)
+                }
+            }
             for (z in zones) {
                 val cx = z.cx * width
                 val cy = z.cy * height
